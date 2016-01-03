@@ -1,0 +1,33 @@
+Building and Running CloudDB
+****************************
+
+Joern Rischmueller (joern.rm@gmail.com) - January 2016
+
+
+Requirements:
+
+The app is build for Google App Engine (https://cloud.google.com/appengine) und uses:
+
+- Google App Engine SDK for Go - Version 1.9.30 - 2015-11-18
+
+Additional dependencies are:
+
+- go-restful - release 1.2 - MIT License - https://github.com/emicklei/go-restful
+
+
+Build and Run:
+
+- Adjust the "app.yaml.in" -> copy to "app.yaml" and exchange
+  -- application -> with your application name
+  -- Basic_Auth -> with your authorization secret
+
+  "application" and "Basic_Auth" have to be in sync with the "gcconfig.pri" settings
+  of you GoldenCheetah Build to link GoldenCheetah to your personally CloudDB.
+
+
+License:
+
+Please respect the License conditions of the GNU AFFERO GENERAL PUBLIC LICENSE.
+
+
+

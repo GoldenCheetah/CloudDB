@@ -1,0 +1,12 @@
+application: <application_name - in sync with GC_CLOUD_DB_APP_NAME in GC config.pri>
+version: 1
+runtime: go
+api_version: go1
+
+handlers:
+- url: /.*
+  script: _go_app
+
+
+env_variables:
+  Basic_Auth: '< the Basic_Auth Secret - in sync with GC_CLOUD_DB_BASIC_AUTH in GC config.pri >'
