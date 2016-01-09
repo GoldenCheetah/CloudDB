@@ -54,13 +54,6 @@ func init() {
 	Operation("updatedChart").
 	Reads(ChartAPIv1{})) // from the request
 
-	ws.Route(ws.GET("/chart").Filter(basicAuthenticate).To(getCharts).
-	// docs
-	Doc("gets a collection of charts").
-	Operation("getCharts").
-	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")).
-	Writes(ChartAPIv1List{})) // on the response
-
 	ws.Route(ws.GET("/chart/{id}").Filter(basicAuthenticate).To(getChartById).
 	// docs
 	Doc("get a chart").
@@ -68,6 +61,16 @@ func init() {
 	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")).
 	Writes(ChartAPIv1{})) // on the response
 
+
+	// Endpoint for ChartHeader only (no JPG or LTMSettings)
+	ws.Route(ws.GET("/chartheader").Filter(basicAuthenticate).To(getChartHeader).
+	// docs
+	Doc("gets a collection of charts header").
+	Operation("getChartHeader").
+	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")).
+	Param(ws.QueryParameter("curated", "Curated true/false").DataType("bool")).
+
+	Writes(ChartAPIHeaderV1List{})) // on the response
 
     // all routes defined - let's go
 
