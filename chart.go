@@ -290,7 +290,7 @@ func getChartById(request *restful.Request, response *restful.Response) {
 
 	chartDB := new(ChartEntity)
 	err = datastore.Get(c, key, chartDB)
-	if err != nil {
+	if err != nil && !isErrFieldMismatch(err) {
 		switch {
 		case appengine.IsOverQuota(err):
 			addPlainTextError(response, http.StatusPaymentRequired, err.Error())
