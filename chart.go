@@ -38,24 +38,24 @@ import (
 // Full Golden Cheetah chart definition (chartentity) which is stored in DB
 // ---------------------------------------------------------------------------------------------------------------//
 type ChartEntity struct {
-	Name 	   		string       `datastore:",noindex"`
-	Description		string       `datastore:",noindex"`
-	Language		string       `datastore:",noindex"`
-	GcVersion 		string
+	Header          ChartEntityHeader
 	ChartXML	    string       `datastore:",noindex"`
 	Image			[]byte       `datastore:",noindex"`
-	LastChanged 	time.Time
-	CreatorId		string
 	CreatorNick		string       `datastore:",noindex"`
 	CreatorEmail	string       `datastore:",noindex"`
-	Curated			bool
-	Deleted         bool
+}
+
+type ChartEntityHeaderOnly struct {
+	Header          ChartEntityHeader
 }
 
 type ChartEntityHeader struct {
-	Name 	   		string
+	Name 	   		string       `datastore:",noindex"`
+	Description 	string       `datastore:",noindex"`
+	Language		string       `datastore:",noindex"`
 	GcVersion 		string
 	LastChanged 	time.Time
+	CreatorId		string
 	Curated			bool
 	Deleted         bool
 }
@@ -67,34 +67,36 @@ type ChartEntityHeader struct {
 
 // Full structure for GET and PUT
 type ChartAPIv1 struct {
-	Id				int64		`json:"id"`
-	Name            string   	`json:"name"`
-	Description     string      `json:"description"`
-	Language        string      `json:"language"`
-	GcVersion       string      `json:"gcversion"`
+	Header          ChartAPIHeaderV1 `json:"header"`
 	ChartXML        string      `json:"chartxml"`
 	Image           string      `json:"image"`
-	LastChanged     string      `json:"lastChange"`
-	CreatorId       string      `json:"creatorId"`
 	CreatorNick     string      `json:"creatorNick"`
 	CreatorEmail    string      `json:"creatorEmail"`
-	Curated			bool		`json:"curated"`
-	Deleted			bool		`json:"deleted"`
 
 }
 
 type ChartAPIv1List []ChartAPIv1
 
+// Header only structure
+type ChartAPIv1HeaderOnly struct {
+	Header          ChartAPIHeaderV1 `json:"header"`
+}
+type ChartAPIv1HeaderOnlyList []ChartAPIv1HeaderOnly
+
+
+// Internal Structure for Header
 type ChartAPIHeaderV1 struct {
 	Id				int64		`json:"id"`
 	Name            string   	`json:"name"`
+	Description     string      `json:"description"`
 	GcVersion       string      `json:"gcversion"`
 	LastChanged     string      `json:"lastChange"`
+	CreatorId       string      `json:"creatorId"`
+	Language        string      `json:"language"`
 	Curated			bool		`json:"curated"`
 	Deleted			bool		`json:"deleted"`
 }
 
-type ChartAPIHeaderV1List []ChartAPIHeaderV1;
 
 // ---------------------------------------------------------------------------------------------------------------//
 // Data Storage View
@@ -105,10 +107,7 @@ const chartDBEntityRootKey = "chartsroot"
 
 
 func mapAPItoDBChart(api *ChartAPIv1, db *ChartEntity) {
-	db.Name = api.Name
-	db.Description = api.Description
-	db.Language = api.Language
-	db.GcVersion = api.GcVersion
+	mapAPItoDBChartHeader(&api.Header, &db.Header)
 	db.ChartXML = api.ChartXML
 	data, err := b64.StdEncoding.DecodeString(api.Image)
 	if err != nil{
@@ -116,35 +115,37 @@ func mapAPItoDBChart(api *ChartAPIv1, db *ChartEntity) {
 	} else {
 		db.Image = data
 	}
-	db.LastChanged, _ = time.Parse(dateTimeLayout, api.LastChanged)
-	db.CreatorId = api.CreatorId
 	db.CreatorNick = api.CreatorNick
 	db.CreatorEmail = api.CreatorEmail
+}
+
+func mapAPItoDBChartHeader(api *ChartAPIHeaderV1, db *ChartEntityHeader) {
+	db.Name = api.Name
+	db.Description = api.Description
+	db.Language = api.Language
+	db.GcVersion = api.GcVersion
+	db.LastChanged, _ = time.Parse(dateTimeLayout, api.LastChanged)
+	db.CreatorId = api.CreatorId
 	db.Curated = api.Curated
 	db.Deleted = api.Deleted
 }
 
 
-
 func mapDBtoAPIChart(db *ChartEntity, api *ChartAPIv1 ) {
-	api.Name = db.Name
-	api.Description = db.Description
-	api.Language = db.Language
-	api.GcVersion = db.GcVersion
+	mapDBtoAPIChartHeader(&db.Header, &api.Header)
 	api.ChartXML = db.ChartXML
 	api.Image = b64.StdEncoding.EncodeToString(db.Image)
-	api.LastChanged = db.LastChanged.Format(dateTimeLayout)
-	api.Curated = db.Curated
-	api.Deleted = db.Deleted
-	api.CreatorId = db.CreatorId
 	api.CreatorNick = db.CreatorNick
 	api.CreatorEmail = db.CreatorEmail
 }
 
 func mapDBtoAPIChartHeader(db *ChartEntityHeader, api *ChartAPIHeaderV1 ) {
 	api.Name = db.Name
+	api.Description = db.Description
 	api.GcVersion = db.GcVersion
+	api.Language = db.Language
 	api.LastChanged = db.LastChanged.Format(dateTimeLayout)
+	api.CreatorId = db.CreatorId
 	api.Curated = db.Curated
 	api.Deleted = db.Deleted
 }
@@ -178,9 +179,9 @@ func insertChart(request *restful.Request, response *restful.Response) {
 	mapAPItoDBChart(chart, chartDB)
 
 	// complete/set POST fields
-	chartDB.LastChanged = time.Now()
-	chartDB.Curated = false
-	chartDB.Deleted = false
+	chartDB.Header.LastChanged = time.Now()
+	chartDB.Header.Curated = false
+	chartDB.Header.Deleted = false
 
 	// and now store it
 	key := datastore.NewIncompleteKey(c, chartDBEntity, chartEntityRootKey(c))
@@ -208,7 +209,7 @@ func updateChart(request *restful.Request, response *restful.Response) {
 		return
 	}
 
-	if (chart.Id == 0) {
+	if (chart.Header.Id == 0) {
 		addPlainTextError(response, http.StatusBadRequest, "Mandatory Id/Key for Update is missing or invalid")
 		return
 	}
@@ -221,7 +222,7 @@ func updateChart(request *restful.Request, response *restful.Response) {
 
 	// and now store it
 
-	key := datastore.NewKey(c, chartDBEntity, "", chart.Id, chartEntityRootKey(c))
+	key := datastore.NewKey(c, chartDBEntity, "", chart.Header.Id, chartEntityRootKey(c))
 	if 	_, err := datastore.Put(c, key, chartDB); err != nil {
 		if appengine.IsOverQuota(err) {
 			addPlainTextError(response, http.StatusPaymentRequired, err.Error())
@@ -252,8 +253,10 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	q:= datastore.NewQuery(chartDBEntity).Filter("LastChanged >=", date  ).Order("-LastChanged")
-	var chartsOnDBList []ChartEntityHeader
+	// we use >= for time, since also the "invisible" microseconds on the DB need to be considered
+	// by rounding up to the next full second when querying without microseconds (which is the default)go
+	q:= datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date  ).Order("-Header.LastChanged")
+	var chartsOnDBList []ChartEntityHeaderOnly
 	k, err := q.GetAll(c, &chartsOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
 		if appengine.IsOverQuota(err) {
@@ -265,11 +268,11 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 	}
 
 	// DB Entity needs to be mapped back
-	var chartHeaderList ChartAPIHeaderV1List
+	var chartHeaderList ChartAPIv1HeaderOnlyList
 	for i, chartDB := range chartsOnDBList {
-		var chart ChartAPIHeaderV1
-		mapDBtoAPIChartHeader(&chartDB, &chart)
-		chart.Id = k[i].IntID()
+		var chart ChartAPIv1HeaderOnly
+		mapDBtoAPIChartHeader(&chartDB.Header, &chart.Header)
+		chart.Header.Id = k[i].IntID()
 		chartHeaderList = append (chartHeaderList, chart)
 	}
 
@@ -305,7 +308,7 @@ func getChartById(request *restful.Request, response *restful.Response) {
 	// now map and respond
 	chart := new(ChartAPIv1)
 	mapDBtoAPIChart(chartDB, chart)
-	chart.Id = key.IntID()
+	chart.Header.Id = key.IntID()
 
 	response.WriteEntity(chart)
 }

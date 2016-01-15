@@ -70,7 +70,7 @@ func init() {
 	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")).
 	Param(ws.QueryParameter("curated", "Curated true/false").DataType("bool")).
 
-	Writes(ChartAPIHeaderV1List{})) // on the response
+	Writes(ChartAPIv1HeaderOnlyList{})) // on the response
 
     // all routes defined - let's go
 
