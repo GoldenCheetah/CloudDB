@@ -188,7 +188,8 @@ func insertChart(request *restful.Request, response *restful.Response) {
 	key, err := datastore.Put(c, key, chartDB);
 	if  err != nil {
 		if appengine.IsOverQuota(err) {
-			addPlainTextError(response, http.StatusPaymentRequired, err.Error())
+			// return 503 and a text similar to what GAE is returning as well
+			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
 		} else {
 			addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		}
@@ -225,7 +226,8 @@ func updateChart(request *restful.Request, response *restful.Response) {
 	key := datastore.NewKey(c, chartDBEntity, "", chart.Header.Id, chartEntityRootKey(c))
 	if 	_, err := datastore.Put(c, key, chartDB); err != nil {
 		if appengine.IsOverQuota(err) {
-			addPlainTextError(response, http.StatusPaymentRequired, err.Error())
+			// return 503 and a text similar to what GAE is returning as well
+			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
 		} else {
 			addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		}
@@ -260,7 +262,8 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 	k, err := q.GetAll(c, &chartsOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
 		if appengine.IsOverQuota(err) {
-			addPlainTextError(response, http.StatusPaymentRequired, err.Error())
+			// return 503 and a text similar to what GAE is returning as well
+			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
 		} else {
 			addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		}
@@ -296,7 +299,8 @@ func getChartById(request *restful.Request, response *restful.Response) {
 	if err != nil && !isErrFieldMismatch(err) {
 		switch {
 		case appengine.IsOverQuota(err):
-			addPlainTextError(response, http.StatusPaymentRequired, err.Error())
+			// return 503 and a text similar to what GAE is returning as well
+			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
 		case err == datastore.ErrNoSuchEntity:
 			addPlainTextError(response, http.StatusNotFound, err.Error())
 		default:
