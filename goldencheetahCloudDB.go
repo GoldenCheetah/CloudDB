@@ -69,10 +69,26 @@ func init() {
 	Operation("getChartHeader").
 	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")).
 	Param(ws.QueryParameter("curated", "Curated true/false").DataType("bool")).
-
 	Writes(ChartAPIv1HeaderOnlyList{})) // on the response
 
-    // all routes defined - let's go
+	// ----------------------------------------------------------------------------------
+	// setup the curator endpoints - processing see "charts.go"
+	// ----------------------------------------------------------------------------------
+	ws.Route(ws.GET("/curator").Filter(basicAuthenticate).To(getCurator).
+	// docs
+	Doc("gets a collection of curators").
+	Operation("getCurator").
+	Param(ws.QueryParameter("curatorId", "UUid of the Curator").DataType("string")).
+	Writes(CuratorAPIv1List{})) // on the response
+
+	ws.Route(ws.POST("/curator").Filter(basicAuthenticate).To(insertCurator).
+	// docs
+	Doc("creates a curator").
+	Operation("createCurator").
+	Reads(CuratorAPIv1{})) // from the request
+
+
+	// all routes defined - let's go
 
 	restful.Add(ws)
 
