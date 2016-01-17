@@ -268,6 +268,15 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 	// we use >= for time, since also the "invisible" microseconds on the DB need to be considered
 	// by rounding up to the next full second when querying without microseconds (which is the default)go
 	q:= datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date  ).Order("-Header.LastChanged")
+	counter, err := q.Count(c)
+	var moreToQuery bool
+	if counter > 500 {
+		moreToQuery = true
+		q = q.Limit(500)
+	}
+	// query in chunks of 500 (since batch_limit cannot be increased on the Go SDK, we need to implement our
+	// own logic here / but only if there are really more than 500 chart
+
 	var chartsOnDBList []ChartEntityHeaderOnly
 	k, err := q.GetAll(c, &chartsOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
@@ -287,6 +296,39 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 		mapDBtoAPIChartHeader(&chartDB.Header, &chart.Header)
 		chart.Header.Id = k[i].IntID()
 		chartHeaderList = append (chartHeaderList, chart)
+		if moreToQuery {
+			date = chartDB.Header.LastChanged
+		}
+	}
+
+	for (moreToQuery) {
+        chartsOnDBList = nil  // since GetAll appends
+		// now search is done in reverse order / finding the older header entries until all are retrieved
+		q = datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged <", date).Order("-Header.LastChanged").Limit(500)
+		k, err := q.GetAll(c, &chartsOnDBList)
+		if err != nil && !isErrFieldMismatch(err) {
+			if appengine.IsOverQuota(err) {
+				// return 503 and a text similar to what GAE is returning as well
+				addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
+			} else {
+				addPlainTextError(response, http.StatusInternalServerError, err.Error())
+			}
+			return
+		}
+
+		if len(chartsOnDBList) > 0 {
+			for i, chartDB := range chartsOnDBList {
+				var chart ChartAPIv1HeaderOnly
+				mapDBtoAPIChartHeader(&chartDB.Header, &chart.Header)
+				chart.Header.Id = k[i].IntID()
+				chartHeaderList = append(chartHeaderList, chart)
+				date = chartDB.Header.LastChanged
+
+			}
+		} else {
+			moreToQuery = false
+		}
+
 	}
 
 	response.WriteEntity(chartHeaderList)
