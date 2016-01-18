@@ -22,8 +22,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"appengine"
-	"appengine/datastore"
+	"golang.org/x/net/context"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
 
 	"github.com/emicklei/go-restful"
 
@@ -80,7 +81,7 @@ func mapDBtoAPICurator(db *CuratorEntity, api *CuratorAPIv1 ) {
 // supporting functions
 
 // curatorEntityKey returns the key used for all curatorEntity entries.
-func curatorEntityRootKey(c appengine.Context) *datastore.Key {
+func curatorEntityRootKey(c context.Context) *datastore.Key {
 	return datastore.NewKey(c, curatorDBEntity, curatorDBEntityRootKey, 0, nil)
 }
 

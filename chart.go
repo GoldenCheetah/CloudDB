@@ -24,8 +24,9 @@ import (
 	"strconv"
 	"fmt"
 
-	"appengine"
-	"appengine/datastore"
+    "golang.org/x/net/context"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
 
 	b64 "encoding/base64"
 
@@ -155,7 +156,7 @@ func mapDBtoAPIChartHeader(db *ChartEntityHeader, api *ChartAPIHeaderV1 ) {
 // supporting functions
 
 // chartEntityKey returns the key used for all chartEntity entries.
-func chartEntityRootKey(c appengine.Context) *datastore.Key {
+func chartEntityRootKey(c context.Context) *datastore.Key {
 	return datastore.NewKey(c, chartDBEntity, chartDBEntityRootKey, 0, nil)
 }
 
