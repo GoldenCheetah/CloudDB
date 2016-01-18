@@ -245,7 +245,7 @@ func updateChart(request *restful.Request, response *restful.Response) {
 	}
 
 	// send back the key
-	response.WriteHeaderAndEntity(http.StatusOK, strconv.FormatInt(key.IntID(), 10))
+	response.WriteHeaderAndEntity(http.StatusNoContent, strconv.FormatInt(key.IntID(), 10))
 
 }
 
@@ -265,46 +265,15 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	// we use >= for time, since also the "invisible" microseconds on the DB need to be considered
-	// by rounding up to the next full second when querying without microseconds (which is the default)go
+    pageSize := 500
 	q:= datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date  ).Order("-Header.LastChanged")
 	counter, err := q.Count(c)
-	var moreToQuery bool
-	if counter > 500 {
-		moreToQuery = true
-		q = q.Limit(500)
-	}
-	// query in chunks of 500 (since batch_limit cannot be increased on the Go SDK, we need to implement our
-	// own logic here / but only if there are really more than 500 chart
 
-	var chartsOnDBList []ChartEntityHeaderOnly
-	k, err := q.GetAll(c, &chartsOnDBList)
-	if err != nil && !isErrFieldMismatch(err) {
-		if appengine.IsOverQuota(err) {
-			// return 503 and a text similar to what GAE is returning as well
-			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
-		} else {
-			addPlainTextError(response, http.StatusInternalServerError, err.Error())
-		}
-		return
-	}
-
-	// DB Entity needs to be mapped back
 	var chartHeaderList ChartAPIv1HeaderOnlyList
-	for i, chartDB := range chartsOnDBList {
-		var chart ChartAPIv1HeaderOnly
-		mapDBtoAPIChartHeader(&chartDB.Header, &chart.Header)
-		chart.Header.Id = k[i].IntID()
-		chartHeaderList = append (chartHeaderList, chart)
-		if moreToQuery {
-			date = chartDB.Header.LastChanged
-		}
-	}
 
-	for (moreToQuery) {
-        chartsOnDBList = nil  // since GetAll appends
-		// now search is done in reverse order / finding the older header entries until all are retrieved
-		q = datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged <", date).Order("-Header.LastChanged").Limit(500)
+	for currentPage := 0; currentPage*pageSize < counter; currentPage++ {
+		q = q.Limit(pageSize).Offset(currentPage*pageSize)
+		var chartsOnDBList []ChartEntityHeaderOnly
 		k, err := q.GetAll(c, &chartsOnDBList)
 		if err != nil && !isErrFieldMismatch(err) {
 			if appengine.IsOverQuota(err) {
@@ -316,22 +285,17 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 			return
 		}
 
-		if len(chartsOnDBList) > 0 {
-			for i, chartDB := range chartsOnDBList {
-				var chart ChartAPIv1HeaderOnly
-				mapDBtoAPIChartHeader(&chartDB.Header, &chart.Header)
-				chart.Header.Id = k[i].IntID()
-				chartHeaderList = append(chartHeaderList, chart)
-				date = chartDB.Header.LastChanged
-
-			}
-		} else {
-			moreToQuery = false
+		// DB Entity needs to be mapped back
+		for i, chartDB := range chartsOnDBList {
+			var chart ChartAPIv1HeaderOnly
+			mapDBtoAPIChartHeader(&chartDB.Header, &chart.Header)
+			chart.Header.Id = k[i].IntID()
+			chartHeaderList = append (chartHeaderList, chart)
 		}
-
 	}
 
-	response.WriteEntity(chartHeaderList)
+	response.WriteHeaderAndEntity(http.StatusOK, chartHeaderList)
+
 }
 
 func getChartById(request *restful.Request, response *restful.Response) {
@@ -366,8 +330,88 @@ func getChartById(request *restful.Request, response *restful.Response) {
 	mapDBtoAPIChart(chartDB, chart)
 	chart.Header.Id = key.IntID()
 
-	response.WriteEntity(chart)
+	response.WriteHeaderAndEntity(http.StatusOK, chart)
 }
+
+
+func deleteChartById(request *restful.Request, response *restful.Response) {
+
+	changeChartById(request, response, true, false, true)
+
+}
+
+func curateChartById(request *restful.Request, response *restful.Response) {
+
+	newStatusString := request.PathParameter("newStatus")
+	b, err := strconv.ParseBool(newStatusString)
+	if err != nil {
+		addPlainTextError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	changeChartById(request, response, false, true, b)
+
+}
+
+// ------------------- supporting functions ------------------------------------------------
+
+func changeChartById(request *restful.Request, response *restful.Response, changeDeleted bool, changeCurated bool, newStatus bool) {
+	c := appengine.NewContext(request.Request)
+
+	id := request.PathParameter("id")
+	i, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		addPlainTextError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	key := datastore.NewKey(c, chartDBEntity, "", i, chartEntityRootKey(c))
+
+	chartDB := new(ChartEntity)
+	err = datastore.Get(c, key, chartDB)
+	if err != nil && !isErrFieldMismatch(err) {
+		switch {
+		case appengine.IsOverQuota(err):
+			// return 503 and a text similar to what GAE is returning as well
+			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
+		case err == datastore.ErrNoSuchEntity:
+			addPlainTextError(response, http.StatusNotFound, err.Error())
+		default:
+			addPlainTextError(response, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+
+	// now update like requested
+
+	if changeDeleted {
+		chartDB.Header.Deleted = newStatus
+		if newStatus {
+			chartDB.ChartXML = ""
+			chartDB.Image = nil
+		}
+		chartDB.Header.LastChanged = time.Now()
+	}
+
+	if changeCurated {
+		chartDB.Header.Curated = newStatus
+		chartDB.Header.LastChanged = time.Now()
+	}
+
+	if 	_, err := datastore.Put(c, key, chartDB); err != nil {
+		if appengine.IsOverQuota(err) {
+			// return 503 and a text similar to what GAE is returning as well
+			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
+		} else {
+			addPlainTextError(response, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	// send back the key
+	response.WriteHeaderAndEntity(http.StatusNoContent, strconv.FormatInt(key.IntID(), 10))
+
+}
+
 
 // ignore missing fields error when mapping to Header struct
 func isErrFieldMismatch(err error) bool {
