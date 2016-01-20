@@ -77,11 +77,18 @@ func init() {
 	// Endpoint for ChartHeader only (no JPG or LTMSettings)
 	ws.Route(ws.GET("/chartheader").Filter(basicAuthenticate).To(getChartHeader).
 	// docs
-	Doc("gets a collection of charts header").
+	Doc("gets a collection of charts header - in buckets of 500 charts - table sort is new to old").
 	Operation("getChartHeader").
 	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")).
-	Param(ws.QueryParameter("curated", "Curated true/false").DataType("bool")).
 	Writes(ChartAPIv1HeaderOnlyList{})) // on the response
+
+	// Count Chart Headers to be retrieved
+	ws.Route(ws.GET("/chartheader/count").Filter(basicAuthenticate).To(getChartHeaderCount).
+	// docs
+	Doc("gets the number of chart headers for testing,... selection").
+	Operation("getChartHeader").
+	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")))
+
 
 	// ----------------------------------------------------------------------------------
 	// setup the curator endpoints - processing see "charts.go"

@@ -249,8 +249,6 @@ func updateChart(request *restful.Request, response *restful.Response) {
 	response.WriteHeaderAndEntity(http.StatusNoContent, strconv.FormatInt(key.IntID(), 10))
 
 }
-
-
 func getChartHeader(request *restful.Request, response *restful.Response) {
 	c := appengine.NewContext(request.Request)
 
@@ -266,38 +264,58 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-    pageSize := 500
-	q:= datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date  ).Order("-Header.LastChanged")
-	counter, err := q.Count(c)
+	q := datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date).Order("Header.LastChanged").Limit(500)
 
 	var chartHeaderList ChartAPIv1HeaderOnlyList
 
-	for currentPage := 0; currentPage*pageSize < counter; currentPage++ {
-		q = q.Limit(pageSize).Offset(currentPage*pageSize)
-		var chartsOnDBList []ChartEntityHeaderOnly
-		k, err := q.GetAll(c, &chartsOnDBList)
-		if err != nil && !isErrFieldMismatch(err) {
-			if appengine.IsOverQuota(err) {
-				// return 503 and a text similar to what GAE is returning as well
-				addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
-			} else {
-				addPlainTextError(response, http.StatusInternalServerError, err.Error())
-			}
-			return
+	var chartsOnDBList []ChartEntityHeaderOnly
+	k, err := q.GetAll(c, &chartsOnDBList)
+	if err != nil && !isErrFieldMismatch(err) {
+		if appengine.IsOverQuota(err) {
+			// return 503 and a text similar to what GAE is returning as well
+			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
+		} else {
+			addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		}
-
-		// DB Entity needs to be mapped back
-		for i, chartDB := range chartsOnDBList {
-			var chart ChartAPIv1HeaderOnly
-			mapDBtoAPIChartHeader(&chartDB.Header, &chart.Header)
-			chart.Header.Id = k[i].IntID()
-			chartHeaderList = append (chartHeaderList, chart)
-		}
+		return
 	}
+
+	// DB Entity needs to be mapped back
+	for i, chartDB := range chartsOnDBList {
+		var chart ChartAPIv1HeaderOnly
+		mapDBtoAPIChartHeader(&chartDB.Header, &chart.Header)
+		chart.Header.Id = k[i].IntID()
+		chartHeaderList = append(chartHeaderList, chart)
+	}
+
 
 	response.WriteHeaderAndEntity(http.StatusOK, chartHeaderList)
 
 }
+
+
+func getChartHeaderCount(request *restful.Request, response *restful.Response) {
+	c := appengine.NewContext(request.Request)
+
+	var date time.Time
+	var err  error
+	if dateString := request.QueryParameter("dateFrom"); dateString != "" {
+		date, err = time.Parse(time.RFC3339, dateString)
+		if err != nil {
+			addPlainTextError(response, http.StatusBadRequest, fmt.Sprint(err.Error(), " - Correct format is RFC3339"))
+			return
+		}
+	} else {
+		date = time.Time{}
+	}
+
+	q:= datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date  ).Order("-Header.LastChanged")
+	counter, _ := q.Count(c)
+
+	response.WriteHeaderAndEntity(http.StatusOK, counter)
+
+}
+
 
 func getChartById(request *restful.Request, response *restful.Response) {
 	c := appengine.NewContext(request.Request)
