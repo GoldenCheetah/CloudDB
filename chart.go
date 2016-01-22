@@ -232,6 +232,8 @@ func updateChart(request *restful.Request, response *restful.Response) {
 	chartDB := new(ChartEntity)
 	mapAPItoDBChart(chart, chartDB)
 
+	chartDB.Header.LastChanged = time.Now()
+
 	// and now store it
 
 	key := datastore.NewKey(c, chartDBEntity, "", chart.Header.Id, chartEntityRootKey(c))
@@ -264,7 +266,7 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	q := datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date).Order("Header.LastChanged").Limit(500)
+	q := datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date).Order("Header.LastChanged").Limit(200)
 
 	var chartHeaderList ChartAPIv1HeaderOnlyList
 
@@ -361,7 +363,7 @@ func deleteChartById(request *restful.Request, response *restful.Response) {
 
 func curateChartById(request *restful.Request, response *restful.Response) {
 
-	newStatusString := request.PathParameter("newStatus")
+	newStatusString := request.QueryParameter("newStatus")
 	b, err := strconv.ParseBool(newStatusString)
 	if err != nil {
 		addPlainTextError(response, http.StatusBadRequest, err.Error())

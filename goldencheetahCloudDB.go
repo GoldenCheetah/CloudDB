@@ -72,7 +72,7 @@ func init() {
 	Doc("set the curation status of the chart to {newStatus} which must be 'true' or 'false' ").
 	Operation("updateChartCurationStatus").
 	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")).
-	Param(ws.PathParameter("newStatus", "true/false curation status").DataType("bool")))
+	Param(ws.QueryParameter("newStatus", "true/false curation status").DataType("bool")))
 
 	// Endpoint for ChartHeader only (no JPG or LTMSettings)
 	ws.Route(ws.GET("/chartheader").Filter(basicAuthenticate).To(getChartHeader).
