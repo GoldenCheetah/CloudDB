@@ -42,13 +42,13 @@ func init() {
 	Consumes(restful.MIME_JSON).
 	Produces(restful.MIME_JSON) // you can specify this per route as well
 
-	ws.Route(ws.POST("/chart").Filter(basicAuthenticate).To(insertChart).
+	ws.Route(ws.POST("/chart/").Filter(basicAuthenticate).To(insertChart).
 	// docs
 	Doc("creates a chart").
 	Operation("createChart").
 	Reads(ChartAPIv1{})) // from the request
 
-	ws.Route(ws.PUT("/chart").Filter(basicAuthenticate).To(updateChart).
+	ws.Route(ws.PUT("/chart/").Filter(basicAuthenticate).To(updateChart).
 	// docs
 	Doc("updates a chart").
 	Operation("updatedChart").
@@ -67,7 +67,7 @@ func init() {
 	Operation("deleteChartbyId").
 	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")))
 
-	ws.Route(ws.PUT("/chartcuration/{id}/{newStatus").Filter(basicAuthenticate).To(curateChartById).
+	ws.Route(ws.PUT("/chartcuration/{id}").Filter(basicAuthenticate).To(curateChartById).
 	// docs
 	Doc("set the curation status of the chart to {newStatus} which must be 'true' or 'false' ").
 	Operation("updateChartCurationStatus").
