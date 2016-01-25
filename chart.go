@@ -266,7 +266,9 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	q := datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date).Order("Header.LastChanged").Limit(200)
+	const maxNumberOfHeadersPerCall = 200; // this has to be equal to GoldenCheetah - CloudDBChartClient class
+
+	q := datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date).Order("Header.LastChanged").Limit(maxNumberOfHeadersPerCall)
 
 	var chartHeaderList ChartAPIv1HeaderOnlyList
 
