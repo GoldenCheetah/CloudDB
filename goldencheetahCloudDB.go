@@ -34,7 +34,7 @@ func init() {
 	ws := new(restful.WebService)
 
 	// ----------------------------------------------------------------------------------
-	// setup the charts endpoints - processing see "charts.go"
+	// setup the charts endpoints - processing see "entity_charts.go"
 	// ----------------------------------------------------------------------------------
 	ws.
 	Path("/v1").
@@ -91,7 +91,7 @@ func init() {
 
 
 	// ----------------------------------------------------------------------------------
-	// setup the curator endpoints - processing see "charts.go"
+	// setup the curator endpoints - processing see "entity_curator.go"
 	// ----------------------------------------------------------------------------------
 	ws.Route(ws.GET("/curator").Filter(basicAuthenticate).To(getCurator).
 	// docs
@@ -105,6 +105,28 @@ func init() {
 	Doc("creates a curator").
 	Operation("createCurator").
 	Reads(CuratorAPIv1{})) // from the request
+
+	// ----------------------------------------------------------------------------------
+	// setup the status endpoints - processing see "entity_status.go"
+	// ----------------------------------------------------------------------------------
+	ws.Route(ws.GET("/status").Filter(basicAuthenticate).To(getStatus).
+	// docs
+	Doc("gets a collection of status").
+	Operation("getStatus").
+	Param(ws.QueryParameter("dateFrom", "Status Validity").DataType("string")).
+	Writes(StatusEntityAPIv1List{})) // on the response
+
+	ws.Route(ws.GET("/status/latest").Filter(basicAuthenticate).To(getCurrentStatus).
+	// docs
+	Doc("gets the current/latest status").
+	Operation("getStatus").
+	Writes(StatusEntityAPIv1{})) // on the response
+
+	ws.Route(ws.POST("/status").Filter(basicAuthenticate).To(insertStatus).
+	// docs
+	Doc("creates a new status entity").
+	Operation("createStatus").
+	Reads(StatusEntityAPIv1{})) // from the request
 
 
 	// all routes defined - let's go

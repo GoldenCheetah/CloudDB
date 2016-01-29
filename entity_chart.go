@@ -24,14 +24,13 @@ import (
 	"strconv"
 	"fmt"
 
-    "golang.org/x/net/context"
+	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	b64 "encoding/base64"
 
 	"github.com/emicklei/go-restful"
-
 )
 
 
@@ -39,26 +38,26 @@ import (
 // Full Golden Cheetah chart definition (chartentity) which is stored in DB
 // ---------------------------------------------------------------------------------------------------------------//
 type ChartEntity struct {
-	Header          ChartEntityHeader
-	ChartXML	    string       `datastore:",noindex"`
-	Image			[]byte       `datastore:",noindex"`
-	CreatorNick		string       `datastore:",noindex"`
-	CreatorEmail	string       `datastore:",noindex"`
+	Header       ChartEntityHeader
+	ChartXML     string       `datastore:",noindex"`
+	Image        []byte       `datastore:",noindex"`
+	CreatorNick  string       `datastore:",noindex"`
+	CreatorEmail string       `datastore:",noindex"`
 }
 
 type ChartEntityHeaderOnly struct {
-	Header          ChartEntityHeader
+	Header ChartEntityHeader
 }
 
 type ChartEntityHeader struct {
-	Name 	   		string       `datastore:",noindex"`
-	Description 	string       `datastore:",noindex"`
-	Language		string       `datastore:",noindex"`
-	GcVersion 		string
-	LastChanged 	time.Time
-	CreatorId		string
-	Curated			bool
-	Deleted         bool
+	Name        string       `datastore:",noindex"`
+	Description string       `datastore:",noindex"`
+	Language    string       `datastore:",noindex"`
+	GcVersion   string
+	LastChanged time.Time
+	CreatorId   string
+	Curated     bool
+	Deleted     bool
 }
 
 
@@ -68,34 +67,33 @@ type ChartEntityHeader struct {
 
 // Full structure for GET and PUT
 type ChartAPIv1 struct {
-	Header          ChartAPIHeaderV1 `json:"header"`
-	ChartXML        string      `json:"chartxml"`
-	Image           string      `json:"image"`
-	CreatorNick     string      `json:"creatorNick"`
-	CreatorEmail    string      `json:"creatorEmail"`
-
+	Header       ChartAPIHeaderV1 `json:"header"`
+	ChartXML     string      `json:"chartxml"`
+	Image        string      `json:"image"`
+	CreatorNick  string      `json:"creatorNick"`
+	CreatorEmail string      `json:"creatorEmail"`
 }
 
 type ChartAPIv1List []ChartAPIv1
 
 // Header only structure
 type ChartAPIv1HeaderOnly struct {
-	Header          ChartAPIHeaderV1 `json:"header"`
+	Header ChartAPIHeaderV1 `json:"header"`
 }
 type ChartAPIv1HeaderOnlyList []ChartAPIv1HeaderOnly
 
 
 // Internal Structure for Header
 type ChartAPIHeaderV1 struct {
-	Id				int64		`json:"id"`
-	Name            string   	`json:"name"`
-	Description     string      `json:"description"`
-	GcVersion       string      `json:"gcversion"`
-	LastChanged     string      `json:"lastChange"`
-	CreatorId       string      `json:"creatorId"`
-	Language        string      `json:"language"`
-	Curated			bool		`json:"curated"`
-	Deleted			bool		`json:"deleted"`
+	Id          int64                `json:"id"`
+	Name        string        `json:"name"`
+	Description string      `json:"description"`
+	GcVersion   string      `json:"gcversion"`
+	LastChanged string      `json:"lastChange"`
+	CreatorId   string      `json:"creatorId"`
+	Language    string      `json:"language"`
+	Curated     bool                `json:"curated"`
+	Deleted     bool                `json:"deleted"`
 }
 
 
@@ -106,12 +104,11 @@ type ChartAPIHeaderV1 struct {
 const chartDBEntity = "chartentity"
 const chartDBEntityRootKey = "chartsroot"
 
-
 func mapAPItoDBChart(api *ChartAPIv1, db *ChartEntity) {
 	mapAPItoDBChartHeader(&api.Header, &db.Header)
 	db.ChartXML = api.ChartXML
 	data, err := b64.StdEncoding.DecodeString(api.Image)
-	if err != nil{
+	if err != nil {
 		data = nil
 	} else {
 		db.Image = data
@@ -131,8 +128,7 @@ func mapAPItoDBChartHeader(api *ChartAPIHeaderV1, db *ChartEntityHeader) {
 	db.Deleted = api.Deleted
 }
 
-
-func mapDBtoAPIChart(db *ChartEntity, api *ChartAPIv1 ) {
+func mapDBtoAPIChart(db *ChartEntity, api *ChartAPIv1) {
 	mapDBtoAPIChartHeader(&db.Header, &api.Header)
 	api.ChartXML = db.ChartXML
 	api.Image = b64.StdEncoding.EncodeToString(db.Image)
@@ -140,7 +136,7 @@ func mapDBtoAPIChart(db *ChartEntity, api *ChartAPIv1 ) {
 	api.CreatorEmail = db.CreatorEmail
 }
 
-func mapDBtoAPIChartHeader(db *ChartEntityHeader, api *ChartAPIHeaderV1 ) {
+func mapDBtoAPIChartHeader(db *ChartEntityHeader, api *ChartAPIHeaderV1) {
 	api.Name = db.Name
 	api.Description = db.Description
 	api.GcVersion = db.GcVersion
@@ -169,7 +165,7 @@ func insertChart(request *restful.Request, response *restful.Response) {
 
 	chart := new(ChartAPIv1)
 	if err := request.ReadEntity(chart); err != nil {
-		addPlainTextError(response,http.StatusInternalServerError, err.Error())
+		addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -197,7 +193,7 @@ func insertChart(request *restful.Request, response *restful.Response) {
 	// and now store it
 	key := datastore.NewIncompleteKey(ctx, chartDBEntity, chartEntityRootKey(ctx))
 	key, err := datastore.Put(ctx, key, chartDB);
-	if  err != nil {
+	if err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
 			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
@@ -216,7 +212,7 @@ func updateChart(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
 	chart := new(ChartAPIv1)
-	if 	err := request.ReadEntity(chart); err != nil {
+	if err := request.ReadEntity(chart); err != nil {
 		addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -237,7 +233,7 @@ func updateChart(request *restful.Request, response *restful.Response) {
 	// and now store it
 
 	key := datastore.NewKey(ctx, chartDBEntity, "", chart.Header.Id, chartEntityRootKey(ctx))
-	if 	_, err := datastore.Put(ctx, key, chartDB); err != nil {
+	if _, err := datastore.Put(ctx, key, chartDB); err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
 			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
@@ -255,7 +251,7 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
 	var date time.Time
-	var err  error
+	var err error
 	if dateString := request.QueryParameter("dateFrom"); dateString != "" {
 		date, err = time.Parse(time.RFC3339, dateString)
 		if err != nil {
@@ -292,17 +288,15 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 		chartHeaderList = append(chartHeaderList, chart)
 	}
 
-
 	response.WriteHeaderAndEntity(http.StatusOK, chartHeaderList)
 
 }
-
 
 func getChartHeaderCount(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
 	var date time.Time
-	var err  error
+	var err error
 	if dateString := request.QueryParameter("dateFrom"); dateString != "" {
 		date, err = time.Parse(time.RFC3339, dateString)
 		if err != nil {
@@ -313,13 +307,12 @@ func getChartHeaderCount(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	q:= datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date  ).Order("-Header.LastChanged")
+	q := datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date).Order("-Header.LastChanged")
 	counter, _ := q.Count(ctx)
 
 	response.WriteHeaderAndEntity(http.StatusOK, counter)
 
 }
-
 
 func getChartById(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
@@ -355,7 +348,6 @@ func getChartById(request *restful.Request, response *restful.Response) {
 
 	response.WriteHeaderAndEntity(http.StatusOK, chart)
 }
-
 
 func deleteChartById(request *restful.Request, response *restful.Response) {
 
@@ -420,7 +412,7 @@ func changeChartById(request *restful.Request, response *restful.Response, chang
 		chartDB.Header.LastChanged = time.Now()
 	}
 
-	if 	_, err := datastore.Put(c, key, chartDB); err != nil {
+	if _, err := datastore.Put(c, key, chartDB); err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
 			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
