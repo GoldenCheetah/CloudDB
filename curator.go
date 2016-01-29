@@ -90,7 +90,7 @@ func curatorEntityRootKey(c context.Context) *datastore.Key {
 // ---------------------------------------------------------------------------------------------------------------//
 
 func insertCurator(request *restful.Request, response *restful.Response) {
-	c := appengine.NewContext(request.Request)
+	ctx := appengine.NewContext(request.Request)
 
 	curator := new(CuratorAPIv1)
 	if err := request.ReadEntity(curator); err != nil {
@@ -105,8 +105,8 @@ func insertCurator(request *restful.Request, response *restful.Response) {
 	mapAPItoDBCurator(curator, curatorDB)
 
 	// and now store it
-	key := datastore.NewIncompleteKey(c, curatorDBEntity, curatorEntityRootKey(c))
-	key, err := datastore.Put(c, key, curatorDB);
+	key := datastore.NewIncompleteKey(ctx, curatorDBEntity, curatorEntityRootKey(ctx))
+	key, err := datastore.Put(ctx, key, curatorDB);
 	if  err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
@@ -124,7 +124,7 @@ func insertCurator(request *restful.Request, response *restful.Response) {
 
 
 func getCurator(request *restful.Request, response *restful.Response) {
-	c := appengine.NewContext(request.Request)
+	ctx := appengine.NewContext(request.Request)
 
 	curatorString := request.QueryParameter("curatorId");
 
@@ -136,7 +136,7 @@ func getCurator(request *restful.Request, response *restful.Response) {
 
 	}
 	var curatorOnDBList []CuratorEntity
-	k, err := q.GetAll(c, &curatorOnDBList)
+	k, err := q.GetAll(ctx, &curatorOnDBList)
 	if err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
