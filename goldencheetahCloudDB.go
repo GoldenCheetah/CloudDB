@@ -25,7 +25,9 @@ import (
 	"fmt"
 	"net/http"
 
-    "github.com/emicklei/go-restful"  // @Version Tag  v1.2
+	"google.golang.org/appengine"
+
+	"github.com/emicklei/go-restful"  // @Version Tag  v1.2
 )
 
 // init the Webserver within the GAE framework
@@ -42,32 +44,32 @@ func init() {
 	Consumes(restful.MIME_JSON).
 	Produces(restful.MIME_JSON) // you can specify this per route as well
 
-	ws.Route(ws.POST("/chart/").Filter(basicAuthenticate).To(insertChart).
+	ws.Route(ws.POST("/chart/").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(insertChart).
 	// docs
 	Doc("creates a chart").
 	Operation("createChart").
 	Reads(ChartAPIv1{})) // from the request
 
-	ws.Route(ws.PUT("/chart/").Filter(basicAuthenticate).To(updateChart).
+	ws.Route(ws.PUT("/chart/").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(updateChart).
 	// docs
 	Doc("updates a chart").
 	Operation("updatedChart").
 	Reads(ChartAPIv1{})) // from the request
 
-	ws.Route(ws.GET("/chart/{id}").Filter(basicAuthenticate).To(getChartById).
+	ws.Route(ws.GET("/chart/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getChartById).
 	// docs
 	Doc("get a chart").
 	Operation("getChartbyId").
 	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")).
 	Writes(ChartAPIv1{})) // on the response
 
-	ws.Route(ws.DELETE("/chart/{id}").Filter(basicAuthenticate).To(deleteChartById).
+	ws.Route(ws.DELETE("/chart/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(deleteChartById).
 	// docs
 	Doc("delete a chart by setting the deleted status").
 	Operation("deleteChartbyId").
 	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")))
 
-	ws.Route(ws.PUT("/chartcuration/{id}").Filter(basicAuthenticate).To(curateChartById).
+	ws.Route(ws.PUT("/chartcuration/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(curateChartById).
 	// docs
 	Doc("set the curation status of the chart to {newStatus} which must be 'true' or 'false' ").
 	Operation("updateChartCurationStatus").
@@ -75,7 +77,7 @@ func init() {
 	Param(ws.QueryParameter("newStatus", "true/false curation status").DataType("bool")))
 
 	// Endpoint for ChartHeader only (no JPG or LTMSettings)
-	ws.Route(ws.GET("/chartheader").Filter(basicAuthenticate).To(getChartHeader).
+	ws.Route(ws.GET("/chartheader").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getChartHeader).
 	// docs
 	Doc("gets a collection of charts header - in buckets of 500 charts - table sort is new to old").
 	Operation("getChartHeader").
@@ -83,7 +85,7 @@ func init() {
 	Writes(ChartAPIv1HeaderOnlyList{})) // on the response
 
 	// Count Chart Headers to be retrieved
-	ws.Route(ws.GET("/chartheader/count").Filter(basicAuthenticate).To(getChartHeaderCount).
+	ws.Route(ws.GET("/chartheader/count").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getChartHeaderCount).
 	// docs
 	Doc("gets the number of chart headers for testing,... selection").
 	Operation("getChartHeader").
@@ -168,6 +170,18 @@ func basicAuthenticate(req *restful.Request, resp *restful.Response, chain *rest
 
 	chain.ProcessFilter(req, resp)
 } // basicAuthenticate
+
+func filterCloudDBStatus(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	ctx := appengine.NewContext(req.Request)
+
+	if internalGetCurrentStatus(ctx) != Status_Ok {
+		addPlainTextError(resp, http_UnprocessableEntity, status_unprocessable)
+		return
+	}
+
+	chain.ProcessFilter(req, resp)
+}
+
 
 // Convenience functions for error handling
 func addPlainTextError( r *restful.Response, httpStatus int, errorReason string ) {

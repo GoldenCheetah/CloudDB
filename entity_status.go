@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+        "google.golang.org/appengine/memcache"
 
 	"github.com/emicklei/go-restful"
 )
@@ -36,9 +37,21 @@ import (
 // Golden Cheetah curator (statusentity) which is stored in DB
 // ---------------------------------------------------------------------------------------------------------------//
 type StatusEntity struct {
-	Status     int    // use Status code 100 = ok, 200 = Partial Failure, 300 = Service Down
+	Status     int
 	ChangeDate time.Time
 }
+
+const (
+	Status_Ok = 10
+	Status_PartialFailure = 20
+        Status_Outage = 30
+)
+
+const (
+	http_UnprocessableEntity = 422
+)
+
+const status_unprocessable = "Error - CloudDB Status does not allow processing the request"
 
 type StatusEntityText struct {
 	Text     string		 `datastore:",noindex"`
@@ -70,6 +83,11 @@ type StatusEntityGetTextAPIv1 struct {
 
 type StatusEntityGetAPIv1List []StatusEntityGetAPIv1
 
+// ---------------------------------------------------------------------------------------------------------------//
+// Memcache constants
+// ---------------------------------------------------------------------------------------------------------------//
+
+const statusMemcacheKey = "currentstatus"
 
 // ---------------------------------------------------------------------------------------------------------------//
 // Data Storage View
@@ -203,8 +221,18 @@ func getStatus(request *restful.Request, response *restful.Response) {
 func getCurrentStatus(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	q := datastore.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
+	var statusAPI StatusEntityGetAPIv1
 
+	// first check Memcache
+	if item, err := memcache.Get(ctx, statusMemcacheKey); err == nil {
+		if i64, err := strconv.ParseInt(string(item.Value), 10, 0); err == nil {
+			statusAPI.Status = int(i64)
+			response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
+			return
+		}
+	}
+
+	q := datastore.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
 
 	var statusOnDBList []StatusEntity
 	k, err := q.GetAll(ctx, &statusOnDBList)
@@ -219,10 +247,20 @@ func getCurrentStatus(request *restful.Request, response *restful.Response) {
 	}
 
 	// DB Entity needs to be mapped back
-	var statusAPI StatusEntityGetAPIv1
 	mapDBtoAPIStatus(&statusOnDBList[0], &statusAPI)
 	statusAPI.Id = k[0].IntID()
 
+	// add to memcache
+	item := &memcache.Item{
+		Key:   statusMemcacheKey,
+		Value: []byte(strconv.FormatInt(int64(statusAPI.Status), 10)),
+	}
+
+	// Add the item to the memcache, if the key does not already exist / set the key
+	// we ignore errors - since this is just for performance
+	if err := memcache.Add(ctx, item); err == memcache.ErrNotStored {
+		_ = memcache.Set(ctx, item)
+	}
 	response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
 }
 
@@ -258,6 +296,32 @@ func getStatusTextById(request *restful.Request, response *restful.Response) {
 	statusAPI.Text = statusTextOnDBList[0].Text
 
 	response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
+
+}
+
+//---------------------------------------------------------------------------------------
+// internal functions
+//---------------------------------------------------------------------------------------
+
+func internalGetCurrentStatus(ctx context.Context) int {
+
+	// first check Memcache
+	if item, err := memcache.Get(ctx, statusMemcacheKey); err == nil {
+		if i64, err := strconv.ParseInt(string(item.Value), 10, 0); err == nil {
+			return int(i64)
+		}
+	}
+
+	q := datastore.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
+
+	var statusOnDBList []StatusEntity
+	_, err := q.GetAll(ctx, &statusOnDBList)
+	if err != nil && !isErrFieldMismatch(err) {
+		// we are not blocking to due problems in Status Management
+		return Status_Ok
+	}
+
+	return statusOnDBList[0].Status
 }
 
 
