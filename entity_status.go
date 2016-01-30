@@ -27,7 +27,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-        "google.golang.org/appengine/memcache"
+	"google.golang.org/appengine/memcache"
 
 	"github.com/emicklei/go-restful"
 )
@@ -44,7 +44,7 @@ type StatusEntity struct {
 const (
 	Status_Ok = 10
 	Status_PartialFailure = 20
-        Status_Outage = 30
+	Status_Outage = 30
 )
 
 const (
@@ -54,7 +54,7 @@ const (
 const status_unprocessable = "Error - CloudDB Status does not allow processing the request"
 
 type StatusEntityText struct {
-	Text     string		 `datastore:",noindex"`
+	Text string                 `datastore:",noindex"`
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
@@ -63,23 +63,22 @@ type StatusEntityText struct {
 
 // Full structure for POST/PUT
 type StatusEntityPostAPIv1 struct {
-	Id         int64	`json:"id"`
-	Status     int     	`json:"status"`
-	ChangeDate string      	`json:"changeDate"`
+	Id         int64        `json:"id"`
+	Status     int        `json:"status"`
+	ChangeDate string        `json:"changeDate"`
 	Text       string       `json:"text"`
 }
 
 type StatusEntityGetAPIv1 struct {
-	Id         int64	`json:"id"`
-	Status     int     	`json:"status"`
-	ChangeDate string      	`json:"changeDate"`
+	Id         int64        `json:"id"`
+	Status     int        `json:"status"`
+	ChangeDate string        `json:"changeDate"`
 }
 
 type StatusEntityGetTextAPIv1 struct {
-	Id         int64	`json:"id"`
-	Text       string       `json:"text"`
+	Id   int64        `json:"id"`
+	Text string       `json:"text"`
 }
-
 
 type StatusEntityGetAPIv1List []StatusEntityGetAPIv1
 
@@ -96,7 +95,6 @@ const statusMemcacheKey = "currentstatus"
 const statusDBEntityRootKey = "statusroot"
 const statusDBEntity = "statusentity"
 const statusDBEntityText = "statusText"
-
 
 func mapAPItoDBStatus(api *StatusEntityPostAPIv1, db *StatusEntity) {
 	db.Status = api.Status
@@ -170,6 +168,17 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 		}
 	}
 
+	var in StatusEntityGetAPIv1
+	in.Id = key.IntID()
+	in.Status = status.Status
+	in.ChangeDate = status.ChangeDate
+
+	// add to memcache / overwrite existing / ignore errors
+	item := &memcache.Item{
+		Key:   statusMemcacheKey,
+		Object: in,
+	}
+	memcache.Gob.Set(ctx, item)
 
 	// send back the key
 	response.WriteHeaderAndEntity(http.StatusCreated, strconv.FormatInt(key.IntID(), 10))
@@ -224,12 +233,9 @@ func getCurrentStatus(request *restful.Request, response *restful.Response) {
 	var statusAPI StatusEntityGetAPIv1
 
 	// first check Memcache
-	if item, err := memcache.Get(ctx, statusMemcacheKey); err == nil {
-		if i64, err := strconv.ParseInt(string(item.Value), 10, 0); err == nil {
-			statusAPI.Status = int(i64)
-			response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
-			return
-		}
+	if _, err := memcache.Gob.Get(ctx, statusMemcacheKey, &statusAPI); err == nil {
+		response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
+		return
 	}
 
 	q := datastore.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
@@ -250,17 +256,13 @@ func getCurrentStatus(request *restful.Request, response *restful.Response) {
 	mapDBtoAPIStatus(&statusOnDBList[0], &statusAPI)
 	statusAPI.Id = k[0].IntID()
 
-	// add to memcache
+	// add to memcache / overwrite existing / ignore errors
 	item := &memcache.Item{
 		Key:   statusMemcacheKey,
-		Value: []byte(strconv.FormatInt(int64(statusAPI.Status), 10)),
+		Object: statusAPI,
 	}
+	memcache.Gob.Set(ctx, item)
 
-	// Add the item to the memcache, if the key does not already exist / set the key
-	// we ignore errors - since this is just for performance
-	if err := memcache.Add(ctx, item); err == memcache.ErrNotStored {
-		_ = memcache.Set(ctx, item)
-	}
 	response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
 }
 
