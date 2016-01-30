@@ -109,24 +109,34 @@ func init() {
 	// ----------------------------------------------------------------------------------
 	// setup the status endpoints - processing see "entity_status.go"
 	// ----------------------------------------------------------------------------------
-	ws.Route(ws.GET("/status").Filter(basicAuthenticate).To(getStatus).
-	// docs
-	Doc("gets a collection of status").
-	Operation("getStatus").
-	Param(ws.QueryParameter("dateFrom", "Status Validity").DataType("string")).
-	Writes(StatusEntityAPIv1List{})) // on the response
-
-	ws.Route(ws.GET("/status/latest").Filter(basicAuthenticate).To(getCurrentStatus).
-	// docs
-	Doc("gets the current/latest status").
-	Operation("getStatus").
-	Writes(StatusEntityAPIv1{})) // on the response
 
 	ws.Route(ws.POST("/status").Filter(basicAuthenticate).To(insertStatus).
 	// docs
 	Doc("creates a new status entity").
 	Operation("createStatus").
-	Reads(StatusEntityAPIv1{})) // from the request
+	Reads(StatusEntityPostAPIv1{})) // from the request
+
+	ws.Route(ws.GET("/status").Filter(basicAuthenticate).To(getStatus).
+	// docs
+	Doc("gets a collection of status").
+	Operation("getStatus").
+	Param(ws.QueryParameter("dateFrom", "Status Validity").DataType("string")).
+	Writes(StatusEntityGetAPIv1List{})) // on the response
+
+	ws.Route(ws.GET("/status/latest").Filter(basicAuthenticate).To(getCurrentStatus).
+	// docs
+	Doc("gets the current/latest status").
+	Operation("getStatus").
+	Writes(StatusEntityGetAPIv1{})) // on the response
+
+	ws.Route(ws.GET("/statustext/{id}").Filter(basicAuthenticate).To(getStatusTextById).
+	// docs
+	Doc("gets the text for a specific status entity").
+	Operation("getStatusText").
+	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")).
+	Writes(StatusEntityGetTextAPIv1{})) // on the response
+
+
 
 
 	// all routes defined - let's go

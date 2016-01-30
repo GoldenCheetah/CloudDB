@@ -36,7 +36,7 @@ import (
 // ---------------------------------------------------------------------------------------------------------------//
 type CuratorEntity struct {
 	CuratorId       string
-	Nickname	    string
+	Nickname	string
 	Email           string
 
 }
@@ -47,7 +47,7 @@ type CuratorEntity struct {
 
 // Full structure for GET and PUT
 type CuratorAPIv1 struct {
-	Id				int64		`json:"id"`
+	Id		int64		`json:"id"`
 	CuratorId       string      `json:"curatorId"`
 	Nickname        string      `json:"nickname"`
 	Email           string      `json:"email"`

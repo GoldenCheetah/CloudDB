@@ -40,28 +40,47 @@ type StatusEntity struct {
 	ChangeDate time.Time
 }
 
+type StatusEntityText struct {
+	Text     string		 `datastore:",noindex"`
+}
+
 // ---------------------------------------------------------------------------------------------------------------//
 // API View Definition
 // ---------------------------------------------------------------------------------------------------------------//
 
-// Full structure for GET and PUT
-type StatusEntityAPIv1 struct {
+// Full structure for POST/PUT
+type StatusEntityPostAPIv1 struct {
+	Id         int64	`json:"id"`
+	Status     int     	`json:"status"`
+	ChangeDate string      	`json:"changeDate"`
+	Text       string       `json:"text"`
+}
+
+type StatusEntityGetAPIv1 struct {
 	Id         int64	`json:"id"`
 	Status     int     	`json:"status"`
 	ChangeDate string      	`json:"changeDate"`
 }
 
-type StatusEntityAPIv1List []StatusEntityAPIv1
+type StatusEntityGetTextAPIv1 struct {
+	Id         int64	`json:"id"`
+	Text       string       `json:"text"`
+}
+
+
+type StatusEntityGetAPIv1List []StatusEntityGetAPIv1
 
 
 // ---------------------------------------------------------------------------------------------------------------//
 // Data Storage View
 // ---------------------------------------------------------------------------------------------------------------//
 
-const statusDBEntity = "statusentity"
 const statusDBEntityRootKey = "statusroot"
+const statusDBEntity = "statusentity"
+const statusDBEntityText = "statusText"
 
-func mapAPItoDBStatus(api *StatusEntityAPIv1, db *StatusEntity) {
+
+func mapAPItoDBStatus(api *StatusEntityPostAPIv1, db *StatusEntity) {
 	db.Status = api.Status
 	if api.ChangeDate != "" {
 		db.ChangeDate, _ = time.Parse(dateTimeLayout, api.ChangeDate)
@@ -71,7 +90,7 @@ func mapAPItoDBStatus(api *StatusEntityAPIv1, db *StatusEntity) {
 
 }
 
-func mapDBtoAPIStatus(db *StatusEntity, api *StatusEntityAPIv1) {
+func mapDBtoAPIStatus(db *StatusEntity, api *StatusEntityGetAPIv1) {
 	api.Status = db.Status
 	api.ChangeDate = db.ChangeDate.Format(dateTimeLayout)
 }
@@ -79,7 +98,7 @@ func mapDBtoAPIStatus(db *StatusEntity, api *StatusEntityAPIv1) {
 
 // supporting functions
 
-// curatorEntityKey returns the key used for all curatorEntity entries.
+// statusEntityKey returns the key used for all statusEntity entries.
 func statusEntityRootKey(ctx context.Context) *datastore.Key {
 	return datastore.NewKey(ctx, statusDBEntity, statusDBEntityRootKey, 0, nil)
 }
@@ -91,7 +110,7 @@ func statusEntityRootKey(ctx context.Context) *datastore.Key {
 func insertStatus(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	status := new(StatusEntityAPIv1)
+	status := new(StatusEntityPostAPIv1)
 	if err := request.ReadEntity(status); err != nil {
 		addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		return
@@ -116,6 +135,24 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 		return
 	}
 
+	if status.Text != "" {
+		statusDBText := new(StatusEntityText)
+		statusDBText.Text = status.Text
+		// and now store it as child of statusEntry
+		key := datastore.NewIncompleteKey(ctx, statusDBEntityText, key)
+		key, err := datastore.Put(ctx, key, statusDBText);
+		if err != nil {
+			if appengine.IsOverQuota(err) {
+				// return 503 and a text similar to what GAE is returning as well
+				addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
+			} else {
+				addPlainTextError(response, http.StatusInternalServerError, err.Error())
+			}
+			return
+		}
+	}
+
+
 	// send back the key
 	response.WriteHeaderAndEntity(http.StatusCreated, strconv.FormatInt(key.IntID(), 10))
 
@@ -138,7 +175,7 @@ func getStatus(request *restful.Request, response *restful.Response) {
 
 	q := datastore.NewQuery(statusDBEntity).Filter("ChangeDate >=", date).Order("-ChangeDate")
 
-	var statusList StatusEntityAPIv1List
+	var statusList StatusEntityGetAPIv1List
 
 	var statusOnDBList []StatusEntity
 	k, err := q.GetAll(ctx, &statusOnDBList)
@@ -154,7 +191,7 @@ func getStatus(request *restful.Request, response *restful.Response) {
 
 	// DB Entity needs to be mapped back
 	for i, statusDB := range statusOnDBList {
-		var statusAPI StatusEntityAPIv1
+		var statusAPI StatusEntityGetAPIv1
 		mapDBtoAPIStatus(&statusDB, &statusAPI)
 		statusAPI.Id = k[i].IntID()
 		statusList = append(statusList, statusAPI)
@@ -168,7 +205,6 @@ func getCurrentStatus(request *restful.Request, response *restful.Response) {
 
 	q := datastore.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
 
-	var statusList StatusEntityAPIv1List
 
 	var statusOnDBList []StatusEntity
 	k, err := q.GetAll(ctx, &statusOnDBList)
@@ -183,12 +219,45 @@ func getCurrentStatus(request *restful.Request, response *restful.Response) {
 	}
 
 	// DB Entity needs to be mapped back
-	var statusAPI StatusEntityAPIv1
+	var statusAPI StatusEntityGetAPIv1
 	mapDBtoAPIStatus(&statusOnDBList[0], &statusAPI)
 	statusAPI.Id = k[0].IntID()
-	statusList = append(statusList, statusAPI)
 
-	response.WriteHeaderAndEntity(http.StatusOK, statusList)
+	response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
+}
+
+func getStatusTextById(request *restful.Request, response *restful.Response) {
+	ctx := appengine.NewContext(request.Request)
+
+	id := request.PathParameter("id")
+	i, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		addPlainTextError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	statusKey := datastore.NewKey(ctx, statusDBEntity, "", i, statusEntityRootKey(ctx))
+
+	q := datastore.NewQuery(statusDBEntityText).Ancestor(statusKey).Limit(1) // we have max. 1 Text per status
+
+	var statusTextOnDBList []StatusEntityText
+	k, err := q.GetAll(ctx, &statusTextOnDBList)
+	if err != nil && !isErrFieldMismatch(err) {
+		if appengine.IsOverQuota(err) {
+			// return 503 and a text similar to what GAE is returning as well
+			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
+		} else {
+			addPlainTextError(response, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	// DB Entity needs to be mapped back
+	var statusAPI StatusEntityGetTextAPIv1
+	statusAPI.Id = k[0].IntID()
+	statusAPI.Text = statusTextOnDBList[0].Text
+
+	response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
 }
 
 
