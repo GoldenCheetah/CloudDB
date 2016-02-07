@@ -38,7 +38,7 @@ import (
 // Full Golden Cheetah chart definition (chartentity) which is stored in DB
 // ---------------------------------------------------------------------------------------------------------------//
 type ChartEntity struct {
-	Header       ChartEntityHeader
+	Header       CommonEntityHeader
 	ChartXML     string       `datastore:",noindex"`
 	Image        []byte       `datastore:",noindex"`
 	CreatorNick  string       `datastore:",noindex"`
@@ -46,18 +46,7 @@ type ChartEntity struct {
 }
 
 type ChartEntityHeaderOnly struct {
-	Header ChartEntityHeader
-}
-
-type ChartEntityHeader struct {
-	Name        string       `datastore:",noindex"`
-	Description string       `datastore:",noindex"`
-	Language    string       `datastore:",noindex"`
-	GcVersion   string
-	LastChanged time.Time
-	CreatorId   string
-	Curated     bool
-	Deleted     bool
+	Header CommonEntityHeader
 }
 
 
@@ -67,7 +56,7 @@ type ChartEntityHeader struct {
 
 // Full structure for GET and PUT
 type ChartAPIv1 struct {
-	Header       ChartAPIHeaderV1 `json:"header"`
+	Header       CommonAPIHeaderV1 `json:"header"`
 	ChartXML     string      `json:"chartxml"`
 	Image        string      `json:"image"`
 	CreatorNick  string      `json:"creatorNick"`
@@ -78,23 +67,10 @@ type ChartAPIv1List []ChartAPIv1
 
 // Header only structure
 type ChartAPIv1HeaderOnly struct {
-	Header ChartAPIHeaderV1 `json:"header"`
+	Header CommonAPIHeaderV1 `json:"header"`
 }
 type ChartAPIv1HeaderOnlyList []ChartAPIv1HeaderOnly
 
-
-// Internal Structure for Header
-type ChartAPIHeaderV1 struct {
-	Id          int64                `json:"id"`
-	Name        string        `json:"name"`
-	Description string      `json:"description"`
-	GcVersion   string      `json:"gcversion"`
-	LastChanged string      `json:"lastChange"`
-	CreatorId   string      `json:"creatorId"`
-	Language    string      `json:"language"`
-	Curated     bool                `json:"curated"`
-	Deleted     bool                `json:"deleted"`
-}
 
 
 // ---------------------------------------------------------------------------------------------------------------//
@@ -105,7 +81,7 @@ const chartDBEntity = "chartentity"
 const chartDBEntityRootKey = "chartsroot"
 
 func mapAPItoDBChart(api *ChartAPIv1, db *ChartEntity) {
-	mapAPItoDBChartHeader(&api.Header, &db.Header)
+	mapAPItoDBCommonHeader(&api.Header, &db.Header)
 	db.ChartXML = api.ChartXML
 	data, err := b64.StdEncoding.DecodeString(api.Image)
 	if err != nil {
@@ -117,34 +93,13 @@ func mapAPItoDBChart(api *ChartAPIv1, db *ChartEntity) {
 	db.CreatorEmail = api.CreatorEmail
 }
 
-func mapAPItoDBChartHeader(api *ChartAPIHeaderV1, db *ChartEntityHeader) {
-	db.Name = api.Name
-	db.Description = api.Description
-	db.Language = api.Language
-	db.GcVersion = api.GcVersion
-	db.LastChanged, _ = time.Parse(dateTimeLayout, api.LastChanged)
-	db.CreatorId = api.CreatorId
-	db.Curated = api.Curated
-	db.Deleted = api.Deleted
-}
 
 func mapDBtoAPIChart(db *ChartEntity, api *ChartAPIv1) {
-	mapDBtoAPIChartHeader(&db.Header, &api.Header)
+	mapDBtoAPICommonHeader(&db.Header, &api.Header)
 	api.ChartXML = db.ChartXML
 	api.Image = b64.StdEncoding.EncodeToString(db.Image)
 	api.CreatorNick = db.CreatorNick
 	api.CreatorEmail = db.CreatorEmail
-}
-
-func mapDBtoAPIChartHeader(db *ChartEntityHeader, api *ChartAPIHeaderV1) {
-	api.Name = db.Name
-	api.Description = db.Description
-	api.GcVersion = db.GcVersion
-	api.Language = db.Language
-	api.LastChanged = db.LastChanged.Format(dateTimeLayout)
-	api.CreatorId = db.CreatorId
-	api.Curated = db.Curated
-	api.Deleted = db.Deleted
 }
 
 
@@ -243,8 +198,8 @@ func updateChart(request *restful.Request, response *restful.Response) {
 		return
 	}
 
-	// send back the key
-	response.WriteHeaderAndEntity(http.StatusNoContent, strconv.FormatInt(key.IntID(), 10))
+	// Response is Empty for 204
+	response.WriteHeaderAndEntity(http.StatusNoContent, "")
 
 }
 func getChartHeader(request *restful.Request, response *restful.Response) {
@@ -283,7 +238,7 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 	// DB Entity needs to be mapped back
 	for i, chartDB := range chartsOnDBList {
 		var chart ChartAPIv1HeaderOnly
-		mapDBtoAPIChartHeader(&chartDB.Header, &chart.Header)
+		mapDBtoAPICommonHeader(&chartDB.Header, &chart.Header)
 		chart.Header.Id = k[i].IntID()
 		chartHeaderList = append(chartHeaderList, chart)
 	}
@@ -422,14 +377,8 @@ func changeChartById(request *restful.Request, response *restful.Response, chang
 		return
 	}
 
-	// send back the key
-	response.WriteHeaderAndEntity(http.StatusNoContent, strconv.FormatInt(key.IntID(), 10))
+	// Response is Empty for 204
+	response.WriteHeaderAndEntity(http.StatusNoContent, "")
 
 }
 
-
-// ignore missing fields error when mapping to Header struct
-func isErrFieldMismatch(err error) bool {
-	_, ok := err.(*datastore.ErrFieldMismatch)
-	return ok
-}

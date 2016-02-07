@@ -318,7 +318,7 @@ func internalGetCurrentStatus(ctx context.Context) int {
 
 	var statusOnDBList []StatusEntity
 	_, err := q.GetAll(ctx, &statusOnDBList)
-	if err != nil && !isErrFieldMismatch(err) {
+	if (err != nil && !isErrFieldMismatch(err)) || len(statusOnDBList) == 0 {
 		// we are not blocking to due problems in Status Management
 		return Status_Ok
 	}
