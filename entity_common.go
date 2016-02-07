@@ -79,11 +79,14 @@ func mapDBtoAPICommonHeader(db *CommonEntityHeader, api *CommonAPIHeaderV1) {
 }
 
 func commonResponseErrorProcessing(response *restful.Response, err error) {
-	if appengine.IsOverQuota(err) {
+	switch {
+	case appengine.IsOverQuota(err):
 		// return 503 and a text similar to what GAE is returning as well
 		addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
-	} else {
-		addPlainTextError(response, http.StatusInternalServerError, err.Error())
+	case err == datastore.ErrNoSuchEntity:
+		addPlainTextError(response, http.StatusNotFound, err.Error())
+	default:
+		addPlainTextError(response, http.StatusBadRequest, err.Error())
 	}
 }
 

@@ -79,7 +79,7 @@ func init() {
 	// Endpoint for ChartHeader only (no JPG or LTMSettings)
 	ws.Route(ws.GET("/chartheader").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getChartHeader).
 	// docs
-	Doc("gets a collection of charts header - in buckets of 500 charts - table sort is new to old").
+	Doc("gets a collection of charts header - in buckets of x charts - table sort is new to old").
 	Operation("getChartHeader").
 	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")).
 	Writes(ChartAPIv1HeaderOnlyList{})) // on the response
@@ -91,6 +91,61 @@ func init() {
 	Operation("getChartHeader").
 	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")))
 
+	// ----------------------------------------------------------------------------------
+	// setup the usermetric endpoints - processing see "entity_usermetric.go"
+	// ----------------------------------------------------------------------------------
+	ws.
+	Path("/v1").
+	Doc("Manage User Metrics").
+	Consumes(restful.MIME_JSON).
+	Produces(restful.MIME_JSON) // you can specify this per route as well
+
+	ws.Route(ws.POST("/usermetric/").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(insertUserMetric).
+	// docs
+	Doc("creates a usermetric").
+	Operation("createUserMetric").
+	Reads(UserMetricAPIv1{})) // from the request
+
+	ws.Route(ws.PUT("/usermetric/").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(updateUserMetric).
+	// docs
+	Doc("updates a usermetric").
+	Operation("updateUserMetric").
+	Reads(UserMetricAPIv1{})) // from the request
+
+	ws.Route(ws.GET("/usermetric/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getUserMetricById).
+	// docs
+	Doc("get a usermetric").
+	Operation("getUserMetricbyId").
+	Param(ws.PathParameter("id", "identifier of the user metric").DataType("string")).
+	Writes(UserMetricAPIv1{})) // on the response
+
+	ws.Route(ws.DELETE("/usermetric/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(deleteUserMetricById).
+	// docs
+	Doc("delete a usermetric by setting the deleted status").
+	Operation("deleteUserMetricbyId").
+	Param(ws.PathParameter("id", "identifier of the usermetric").DataType("string")))
+
+	ws.Route(ws.PUT("/usermetriccuration/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(curateUserMetricById).
+	// docs
+	Doc("set the curation status of the usermetric to {newStatus} which must be 'true' or 'false' ").
+	Operation("updateUserMetricCurationStatus").
+	Param(ws.PathParameter("id", "identifier of the usermetric").DataType("string")).
+	Param(ws.QueryParameter("newStatus", "true/false curation status").DataType("bool")))
+
+	// Endpoint for ChartHeader only (no JPG or LTMSettings)
+	ws.Route(ws.GET("/usermetricheader").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getUserMetricHeader).
+	// docs
+	Doc("gets a collection of usermetric header - in buckets of x headers - table sort is new to old").
+	Operation("getUserMetricHeader").
+	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")).
+	Writes(UserMetricAPIv1HeaderOnlyList{})) // on the response
+
+	// Count Chart Headers to be retrieved
+	ws.Route(ws.GET("/usermetricheader/count").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getUserMetricHeaderCount).
+	// docs
+	Doc("gets the number of usermetric headers for testing,... selection").
+	Operation("getUserMetricHeader").
+	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")))
 
 	// ----------------------------------------------------------------------------------
 	// setup the curator endpoints - processing see "entity_curator.go"
@@ -137,8 +192,6 @@ func init() {
 	Operation("getStatusText").
 	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")).
 	Writes(StatusEntityGetTextAPIv1{})) // on the response
-
-
 
 
 	// all routes defined - let's go

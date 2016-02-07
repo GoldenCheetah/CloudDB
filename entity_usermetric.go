@@ -28,24 +28,21 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
-	b64 "encoding/base64"
-
 	"github.com/emicklei/go-restful"
 )
 
 
 // ---------------------------------------------------------------------------------------------------------------//
-// Full Golden Cheetah chart definition (chartentity) which is stored in DB
+// Full Golden Cheetah usermetric definition (usermetricentity) which is stored in DB
 // ---------------------------------------------------------------------------------------------------------------//
-type ChartEntity struct {
+type UserMetricEntity struct {
 	Header       CommonEntityHeader
-	ChartXML     string       `datastore:",noindex"`
-	Image        []byte       `datastore:",noindex"`
+	MetricXML     string       `datastore:",noindex"`
 	CreatorNick  string       `datastore:",noindex"`
 	CreatorEmail string       `datastore:",noindex"`
 }
 
-type ChartEntityHeaderOnly struct {
+type UserMetricEntityHeaderOnly struct {
 	Header CommonEntityHeader
 }
 
@@ -55,21 +52,20 @@ type ChartEntityHeaderOnly struct {
 // ---------------------------------------------------------------------------------------------------------------//
 
 // Full structure for GET and PUT
-type ChartAPIv1 struct {
+type UserMetricAPIv1 struct {
 	Header       CommonAPIHeaderV1 `json:"header"`
-	ChartXML     string      `json:"chartxml"`
-	Image        string      `json:"image"`
+	MetricXML     string      `json:"metrictxml"`
 	CreatorNick  string      `json:"creatorNick"`
 	CreatorEmail string      `json:"creatorEmail"`
 }
 
-type ChartAPIv1List []ChartAPIv1
+type UserMetricAPIv1List []UserMetricAPIv1
 
 // Header only structure
-type ChartAPIv1HeaderOnly struct {
+type UserMetricAPIv1HeaderOnly struct {
 	Header CommonAPIHeaderV1 `json:"header"`
 }
-type ChartAPIv1HeaderOnlyList []ChartAPIv1HeaderOnly
+type UserMetricAPIv1HeaderOnlyList []UserMetricAPIv1HeaderOnly
 
 
 
@@ -77,27 +73,20 @@ type ChartAPIv1HeaderOnlyList []ChartAPIv1HeaderOnly
 // Data Storage View
 // ---------------------------------------------------------------------------------------------------------------//
 
-const chartDBEntity = "chartentity"
-const chartDBEntityRootKey = "chartsroot"
+const usermetricDBEntity = "usermetricentity"
+const usermetricDBEntityRootKey = "usermetricroot"
 
-func mapAPItoDBChart(api *ChartAPIv1, db *ChartEntity) {
+func mapAPItoDBUserMetric(api *UserMetricAPIv1, db *UserMetricEntity) {
 	mapAPItoDBCommonHeader(&api.Header, &db.Header)
-	db.ChartXML = api.ChartXML
-	data, err := b64.StdEncoding.DecodeString(api.Image)
-	if err != nil {
-		data = nil
-	} else {
-		db.Image = data
-	}
+	db.MetricXML = api.MetricXML
 	db.CreatorNick = api.CreatorNick
 	db.CreatorEmail = api.CreatorEmail
 }
 
 
-func mapDBtoAPIChart(db *ChartEntity, api *ChartAPIv1) {
+func mapDBtoAPIUserMetric(db* UserMetricEntity, api *UserMetricAPIv1) {
 	mapDBtoAPICommonHeader(&db.Header, &api.Header)
-	api.ChartXML = db.ChartXML
-	api.Image = b64.StdEncoding.EncodeToString(db.Image)
+	api.MetricXML = db.MetricXML
 	api.CreatorNick = db.CreatorNick
 	api.CreatorEmail = db.CreatorEmail
 }
@@ -106,20 +95,20 @@ func mapDBtoAPIChart(db *ChartEntity, api *ChartAPIv1) {
 
 // supporting functions
 
-// chartEntityKey returns the key used for all chartEntity entries.
-func chartEntityRootKey(ctx context.Context) *datastore.Key {
-	return datastore.NewKey(ctx, chartDBEntity, chartDBEntityRootKey, 0, nil)
+// usermetricEntityKey returns the key used for all usermetricEntity entries.
+func usermetricEntityRootKey(ctx context.Context) *datastore.Key {
+	return datastore.NewKey(ctx, usermetricDBEntity, usermetricDBEntityRootKey, 0, nil)
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
 // request/response handler
 // ---------------------------------------------------------------------------------------------------------------//
 
-func insertChart(request *restful.Request, response *restful.Response) {
+func insertUserMetric(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	chart := new(ChartAPIv1)
-	if err := request.ReadEntity(chart); err != nil {
+	metric := new(UserMetricAPIv1)
+	if err := request.ReadEntity(metric); err != nil {
 		addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -127,27 +116,27 @@ func insertChart(request *restful.Request, response *restful.Response) {
 	// No checks if the necessary fields are filed or not - since GoldenCheetah is
 	// the only consumer of the APIs - any checks/response are to support this use-case
 
-	chartDB := new(ChartEntity)
-	mapAPItoDBChart(chart, chartDB)
+	metricDB := new(UserMetricEntity)
+	mapAPItoDBUserMetric(metric, metricDB)
 
 	// complete/set POST fields
-	chartDB.Header.LastChanged = time.Now()
-	chartDB.Header.Curated = false
-	chartDB.Header.Deleted = false
+	metricDB.Header.LastChanged = time.Now()
+	metricDB.Header.Curated = false
+	metricDB.Header.Deleted = false
 
-	// auto-curate if a registered "curator" is adding a chart
-	curatorQuery := datastore.NewQuery(curatorDBEntity).Filter("CuratorId =", chartDB.Header.CreatorId).KeysOnly()
+	// auto-curate if a registered "curator" is adding user metric
+	curatorQuery := datastore.NewQuery(curatorDBEntity).Filter("CuratorId =", metricDB.Header.CreatorId).KeysOnly()
 	var curatorOnDBList []CuratorEntity
 	_, cErr := curatorQuery.GetAll(ctx, &curatorOnDBList)
 	if cErr != nil {
-		chartDB.Header.Curated = false
+		metricDB.Header.Curated = false
 	} else {
-		chartDB.Header.Curated = true
+		metricDB.Header.Curated = true
 	}
 
 	// and now store it
-	key := datastore.NewIncompleteKey(ctx, chartDBEntity, chartEntityRootKey(ctx))
-	key, err := datastore.Put(ctx, key, chartDB);
+	key := datastore.NewIncompleteKey(ctx, usermetricDBEntity, usermetricEntityRootKey(ctx))
+	key, err := datastore.Put(ctx, key, metricDB);
 	if err != nil {
 		commonResponseErrorProcessing (response, err)
 		return
@@ -158,16 +147,16 @@ func insertChart(request *restful.Request, response *restful.Response) {
 
 }
 
-func updateChart(request *restful.Request, response *restful.Response) {
+func updateUserMetric(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	chart := new(ChartAPIv1)
-	if err := request.ReadEntity(chart); err != nil {
+	metric := new(UserMetricAPIv1)
+	if err := request.ReadEntity(metric); err != nil {
 		addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	if (chart.Header.Id == 0) {
+	if (metric.Header.Id == 0) {
 		addPlainTextError(response, http.StatusBadRequest, "Mandatory Id/Key for Update is missing or invalid")
 		return
 	}
@@ -175,15 +164,15 @@ func updateChart(request *restful.Request, response *restful.Response) {
 	// No more checks if the necessary fields are filed or not - since GoldenCheetah is
 	// the only consumer of the APIs - any checks/response are to support this use-case
 
-	chartDB := new(ChartEntity)
-	mapAPItoDBChart(chart, chartDB)
+	metricDB := new(UserMetricEntity)
+	mapAPItoDBUserMetric(metric, metricDB)
 
-	chartDB.Header.LastChanged = time.Now()
+	metricDB.Header.LastChanged = time.Now()
 
 	// and now store it
 
-	key := datastore.NewKey(ctx, chartDBEntity, "", chart.Header.Id, chartEntityRootKey(ctx))
-	if _, err := datastore.Put(ctx, key, chartDB); err != nil {
+	key := datastore.NewKey(ctx, usermetricDBEntity, "", metric.Header.Id, usermetricEntityRootKey(ctx))
+	if _, err := datastore.Put(ctx, key, metricDB); err != nil {
 		commonResponseErrorProcessing (response, err)
 		return
 	}
@@ -192,7 +181,7 @@ func updateChart(request *restful.Request, response *restful.Response) {
 	response.WriteHeaderAndEntity(http.StatusNoContent, "")
 
 }
-func getChartHeader(request *restful.Request, response *restful.Response) {
+func getUserMetricHeader(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
 	var date time.Time
@@ -207,32 +196,33 @@ func getChartHeader(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	const maxNumberOfHeadersPerCall = 200; // this has to be equal to GoldenCheetah - CloudDBChartClient class
+	const maxNumberOfHeadersPerCall = 200; // this has to be equal to GoldenCheetah - CloudDBUserMetric class
 
-	q := datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date).Order("Header.LastChanged").Limit(maxNumberOfHeadersPerCall)
+	q := datastore.NewQuery(usermetricDBEntity).Filter("Header.LastChanged >=", date).Order("Header.LastChanged").Limit(maxNumberOfHeadersPerCall)
 
-	var chartHeaderList ChartAPIv1HeaderOnlyList
+	var metricHeaderList UserMetricAPIv1HeaderOnlyList
 
-	var chartsOnDBList []ChartEntityHeaderOnly
-	k, err := q.GetAll(ctx, &chartsOnDBList)
+	var metricsOnDBList []UserMetricEntityHeaderOnly
+	k, err := q.GetAll(ctx, &metricsOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
 		commonResponseErrorProcessing (response, err)
+
 		return
 	}
 
 	// DB Entity needs to be mapped back
-	for i, chartDB := range chartsOnDBList {
-		var chart ChartAPIv1HeaderOnly
-		mapDBtoAPICommonHeader(&chartDB.Header, &chart.Header)
-		chart.Header.Id = k[i].IntID()
-		chartHeaderList = append(chartHeaderList, chart)
+	for i, metricDB := range metricsOnDBList {
+		var metric UserMetricAPIv1HeaderOnly
+		mapDBtoAPICommonHeader(&metricDB.Header, &metric.Header)
+		metric.Header.Id = k[i].IntID()
+		metricHeaderList = append(metricHeaderList, metric)
 	}
 
-	response.WriteHeaderAndEntity(http.StatusOK, chartHeaderList)
+	response.WriteHeaderAndEntity(http.StatusOK, metricHeaderList)
 
 }
 
-func getChartHeaderCount(request *restful.Request, response *restful.Response) {
+func getUserMetricHeaderCount(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
 	var date time.Time
@@ -247,61 +237,61 @@ func getChartHeaderCount(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	q := datastore.NewQuery(chartDBEntity).Filter("Header.LastChanged >=", date).Order("-Header.LastChanged")
+	q := datastore.NewQuery(usermetricDBEntity).Filter("Header.LastChanged >=", date).Order("-Header.LastChanged")
 	counter, _ := q.Count(ctx)
 
 	response.WriteHeaderAndEntity(http.StatusOK, counter)
 
 }
 
-func getChartById(request *restful.Request, response *restful.Response) {
+func getUserMetricById(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
 	id := request.PathParameter("id")
 	i, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		commonResponseErrorProcessing (response, err)
+		addPlainTextError(response, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	key := datastore.NewKey(ctx, chartDBEntity, "", i, chartEntityRootKey(ctx))
+	key := datastore.NewKey(ctx, usermetricDBEntity, "", i, usermetricEntityRootKey(ctx))
 
-	chartDB := new(ChartEntity)
-	err = datastore.Get(ctx, key, chartDB)
+	metricDB := new(UserMetricEntity)
+	err = datastore.Get(ctx, key, metricDB)
 	if err != nil && !isErrFieldMismatch(err) {
 		commonResponseErrorProcessing (response, err)
 		return
 	}
 
 	// now map and respond
-	chart := new(ChartAPIv1)
-	mapDBtoAPIChart(chartDB, chart)
-	chart.Header.Id = key.IntID()
+	metric := new(UserMetricAPIv1)
+	mapDBtoAPIUserMetric(metricDB, metric)
+	metric.Header.Id = key.IntID()
 
-	response.WriteHeaderAndEntity(http.StatusOK, chart)
+	response.WriteHeaderAndEntity(http.StatusOK, metric)
 }
 
-func deleteChartById(request *restful.Request, response *restful.Response) {
+func deleteUserMetricById(request *restful.Request, response *restful.Response) {
 
-	changeChartById(request, response, true, false, true)
+	changeUserMetricById(request, response, true, false, true)
 
 }
 
-func curateChartById(request *restful.Request, response *restful.Response) {
+func curateUserMetricById(request *restful.Request, response *restful.Response) {
 
 	newStatusString := request.QueryParameter("newStatus")
 	b, err := strconv.ParseBool(newStatusString)
 	if err != nil {
-		commonResponseErrorProcessing (response, err)
+		addPlainTextError(response, http.StatusBadRequest, err.Error())
 		return
 	}
-	changeChartById(request, response, false, true, b)
+	changeUserMetricById(request, response, false, true, b)
 
 }
 
 // ------------------- supporting functions ------------------------------------------------
 
-func changeChartById(request *restful.Request, response *restful.Response, changeDeleted bool, changeCurated bool, newStatus bool) {
+func changeUserMetricById(request *restful.Request, response *restful.Response, changeDeleted bool, changeCurated bool, newStatus bool) {
 	c := appengine.NewContext(request.Request)
 
 	id := request.PathParameter("id")
@@ -311,10 +301,10 @@ func changeChartById(request *restful.Request, response *restful.Response, chang
 		return
 	}
 
-	key := datastore.NewKey(c, chartDBEntity, "", i, chartEntityRootKey(c))
+	key := datastore.NewKey(c, usermetricDBEntity, "", i, usermetricEntityRootKey(c))
 
-	chartDB := new(ChartEntity)
-	err = datastore.Get(c, key, chartDB)
+	metricDB := new(UserMetricEntity)
+	err = datastore.Get(c, key, metricDB)
 	if err != nil && !isErrFieldMismatch(err) {
 		commonResponseErrorProcessing (response, err)
 		return
@@ -323,26 +313,20 @@ func changeChartById(request *restful.Request, response *restful.Response, chang
 	// now update like requested
 
 	if changeDeleted {
-		chartDB.Header.Deleted = newStatus
+		metricDB.Header.Deleted = newStatus
 		if newStatus {
-			chartDB.ChartXML = ""
-			chartDB.Image = nil
+			metricDB.MetricXML = ""
 		}
-		chartDB.Header.LastChanged = time.Now()
+		metricDB.Header.LastChanged = time.Now()
 	}
 
 	if changeCurated {
-		chartDB.Header.Curated = newStatus
-		chartDB.Header.LastChanged = time.Now()
+		metricDB.Header.Curated = newStatus
+		metricDB.Header.LastChanged = time.Now()
 	}
 
-	if _, err := datastore.Put(c, key, chartDB); err != nil {
-		if appengine.IsOverQuota(err) {
-			// return 503 and a text similar to what GAE is returning as well
-			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
-		} else {
-			addPlainTextError(response, http.StatusInternalServerError, err.Error())
-		}
+	if _, err := datastore.Put(c, key, metricDB); err != nil {
+		commonResponseErrorProcessing (response, err)
 		return
 	}
 
