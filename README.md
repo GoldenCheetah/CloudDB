@@ -4,11 +4,10 @@ first time with GoldenCheetah Version 4.0).
 
 It is planned to provide Cloud Database for GoldenCheetah artifacts
 
-1. Charts
-2. Charts + custom metrics
-3. Custom Metrics
-4. Layouts
-5. Workouts
+1. Charts (including chart specific metrics) (done - available as of Preview v4.0-DEV1601)
+2. User Metrics (WIP - planned for GC V4.0)
+3. Layouts
+4. Workouts
 
 ... more artifacts to come with new features being added to GoldenCheetah
 
