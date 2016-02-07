@@ -125,13 +125,12 @@ func insertUserMetric(request *restful.Request, response *restful.Response) {
 	metricDB.Header.Deleted = false
 
 	// auto-curate if a registered "curator" is adding user metric
-	curatorQuery := datastore.NewQuery(curatorDBEntity).Filter("CuratorId =", metricDB.Header.CreatorId).KeysOnly()
-	var curatorOnDBList []CuratorEntity
-	_, cErr := curatorQuery.GetAll(ctx, &curatorOnDBList)
-	if cErr != nil {
-		metricDB.Header.Curated = false
-	} else {
+	curatorQuery := datastore.NewQuery(curatorDBEntity).Filter("CuratorId =", metricDB.Header.CreatorId)
+	counter, _ := curatorQuery.Count(ctx) // ignore errors/just leave uncurated
+	if counter == 1 {
 		metricDB.Header.Curated = true
+	} else {
+		metricDB.Header.Curated = false
 	}
 
 	// and now store it

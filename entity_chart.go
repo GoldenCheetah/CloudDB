@@ -136,13 +136,12 @@ func insertChart(request *restful.Request, response *restful.Response) {
 	chartDB.Header.Deleted = false
 
 	// auto-curate if a registered "curator" is adding a chart
-	curatorQuery := datastore.NewQuery(curatorDBEntity).Filter("CuratorId =", chartDB.Header.CreatorId).KeysOnly()
-	var curatorOnDBList []CuratorEntity
-	_, cErr := curatorQuery.GetAll(ctx, &curatorOnDBList)
-	if cErr != nil {
-		chartDB.Header.Curated = false
-	} else {
+	curatorQuery := datastore.NewQuery(curatorDBEntity).Filter("CuratorId =", chartDB.Header.CreatorId)
+	counter, _ := curatorQuery.Count(ctx) // ignore errors/just leave uncurated
+	if counter == 1 {
 		chartDB.Header.Curated = true
+	} else {
+		chartDB.Header.Curated = false
 	}
 
 	// and now store it
