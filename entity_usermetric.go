@@ -37,7 +37,7 @@ import (
 // ---------------------------------------------------------------------------------------------------------------//
 type UserMetricEntity struct {
 	Header       CommonEntityHeader
-	MetricXML     string       `datastore:",noindex"`
+	MetricXML    string       `datastore:",noindex"`
 	CreatorNick  string       `datastore:",noindex"`
 	CreatorEmail string       `datastore:",noindex"`
 }
@@ -54,7 +54,7 @@ type UserMetricEntityHeaderOnly struct {
 // Full structure for GET and PUT
 type UserMetricAPIv1 struct {
 	Header       CommonAPIHeaderV1 `json:"header"`
-	MetricXML     string      `json:"metrictxml"`
+	MetricXML    string      `json:"metrictxml"`
 	CreatorNick  string      `json:"creatorNick"`
 	CreatorEmail string      `json:"creatorEmail"`
 }
@@ -113,10 +113,30 @@ func insertUserMetric(request *restful.Request, response *restful.Response) {
 		return
 	}
 
+	if (metric.Header.Key == "") {
+		addPlainTextError(response, http.StatusBadRequest, "Mandatory Key for Insert is missing or invalid")
+		return
+	}
+
+	// check for duplicates first
+	key := datastore.NewKey(ctx, usermetricDBEntity, metric.Header.Key, 0, usermetricEntityRootKey(ctx))
+	metricDB := new(UserMetricEntity)
+	err := datastore.Get(ctx, key, metricDB)
+	if err != nil && !isErrFieldMismatch(err) {
+
+		// object with key does already exist
+		if err == datastore.ErrNoSuchEntity {
+			addPlainTextError(response, http.StatusConflict, err.Error())
+			return
+		}
+		// standard error processing
+		commonResponseErrorProcessing (response, err)
+		return
+	}
+
 	// No checks if the necessary fields are filed or not - since GoldenCheetah is
 	// the only consumer of the APIs - any checks/response are to support this use-case
 
-	metricDB := new(UserMetricEntity)
 	mapAPItoDBUserMetric(metric, metricDB)
 
 	// complete/set POST fields
@@ -134,15 +154,14 @@ func insertUserMetric(request *restful.Request, response *restful.Response) {
 	}
 
 	// and now store it
-	key := datastore.NewIncompleteKey(ctx, usermetricDBEntity, usermetricEntityRootKey(ctx))
-	key, err := datastore.Put(ctx, key, metricDB);
+	key, err = datastore.Put(ctx, key, metricDB);
 	if err != nil {
 		commonResponseErrorProcessing (response, err)
 		return
 	}
 
 	// send back the key
-	response.WriteHeaderAndEntity(http.StatusCreated, strconv.FormatInt(key.IntID(), 10))
+	response.WriteHeaderAndEntity(http.StatusCreated, key.StringID())
 
 }
 
@@ -155,8 +174,8 @@ func updateUserMetric(request *restful.Request, response *restful.Response) {
 		return
 	}
 
-	if (metric.Header.Id == 0) {
-		addPlainTextError(response, http.StatusBadRequest, "Mandatory Id/Key for Update is missing or invalid")
+	if (metric.Header.Key == "") {
+		addPlainTextError(response, http.StatusBadRequest, "Mandatory Key for Update is missing or invalid")
 		return
 	}
 
@@ -170,7 +189,7 @@ func updateUserMetric(request *restful.Request, response *restful.Response) {
 
 	// and now store it
 
-	key := datastore.NewKey(ctx, usermetricDBEntity, "", metric.Header.Id, usermetricEntityRootKey(ctx))
+	key := datastore.NewKey(ctx, usermetricDBEntity, metric.Header.Key, 0, usermetricEntityRootKey(ctx))
 	if _, err := datastore.Put(ctx, key, metricDB); err != nil {
 		commonResponseErrorProcessing (response, err)
 		return
@@ -205,7 +224,6 @@ func getUserMetricHeader(request *restful.Request, response *restful.Response) {
 	k, err := q.GetAll(ctx, &metricsOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
 		commonResponseErrorProcessing (response, err)
-
 		return
 	}
 
@@ -213,7 +231,7 @@ func getUserMetricHeader(request *restful.Request, response *restful.Response) {
 	for i, metricDB := range metricsOnDBList {
 		var metric UserMetricAPIv1HeaderOnly
 		mapDBtoAPICommonHeader(&metricDB.Header, &metric.Header)
-		metric.Header.Id = k[i].IntID()
+		metric.Header.Key = k[i].StringID()
 		metricHeaderList = append(metricHeaderList, metric)
 	}
 
@@ -243,20 +261,19 @@ func getUserMetricHeaderCount(request *restful.Request, response *restful.Respon
 
 }
 
-func getUserMetricById(request *restful.Request, response *restful.Response) {
+func getUserMetricByKey(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	id := request.PathParameter("id")
-	i, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		addPlainTextError(response, http.StatusBadRequest, err.Error())
+	userKey := request.PathParameter("key")
+	if (userKey == "") {
+		addPlainTextError(response, http.StatusBadRequest, "Mandatory Key for Update is missing or invalid")
 		return
 	}
 
-	key := datastore.NewKey(ctx, usermetricDBEntity, "", i, usermetricEntityRootKey(ctx))
+	key := datastore.NewKey(ctx, usermetricDBEntity, userKey, 0, usermetricEntityRootKey(ctx))
 
 	metricDB := new(UserMetricEntity)
-	err = datastore.Get(ctx, key, metricDB)
+	err := datastore.Get(ctx, key, metricDB)
 	if err != nil && !isErrFieldMismatch(err) {
 		commonResponseErrorProcessing (response, err)
 		return
@@ -265,18 +282,18 @@ func getUserMetricById(request *restful.Request, response *restful.Response) {
 	// now map and respond
 	metric := new(UserMetricAPIv1)
 	mapDBtoAPIUserMetric(metricDB, metric)
-	metric.Header.Id = key.IntID()
+	metric.Header.Key= key.StringID()
 
 	response.WriteHeaderAndEntity(http.StatusOK, metric)
 }
 
-func deleteUserMetricById(request *restful.Request, response *restful.Response) {
+func deleteUserMetricByKey(request *restful.Request, response *restful.Response) {
 
-	changeUserMetricById(request, response, true, false, true)
+	changeUserMetricByKey(request, response, true, false, true)
 
 }
 
-func curateUserMetricById(request *restful.Request, response *restful.Response) {
+func curateUserMetricByKey(request *restful.Request, response *restful.Response) {
 
 	newStatusString := request.QueryParameter("newStatus")
 	b, err := strconv.ParseBool(newStatusString)
@@ -284,26 +301,25 @@ func curateUserMetricById(request *restful.Request, response *restful.Response) 
 		addPlainTextError(response, http.StatusBadRequest, err.Error())
 		return
 	}
-	changeUserMetricById(request, response, false, true, b)
+	changeUserMetricByKey(request, response, false, true, b)
 
 }
 
 // ------------------- supporting functions ------------------------------------------------
 
-func changeUserMetricById(request *restful.Request, response *restful.Response, changeDeleted bool, changeCurated bool, newStatus bool) {
+func changeUserMetricByKey(request *restful.Request, response *restful.Response, changeDeleted bool, changeCurated bool, newStatus bool) {
 	c := appengine.NewContext(request.Request)
 
-	id := request.PathParameter("id")
-	i, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		addPlainTextError(response, http.StatusBadRequest, err.Error())
+	userKey := request.PathParameter("key")
+	if (userKey == "") {
+		addPlainTextError(response, http.StatusBadRequest, "Mandatory Key for Update is missing or invalid")
 		return
 	}
 
-	key := datastore.NewKey(c, usermetricDBEntity, "", i, usermetricEntityRootKey(c))
+	key := datastore.NewKey(c, usermetricDBEntity, userKey, 0, usermetricEntityRootKey(c))
 
 	metricDB := new(UserMetricEntity)
-	err = datastore.Get(c, key, metricDB)
+	err := datastore.Get(c, key, metricDB)
 	if err != nil && !isErrFieldMismatch(err) {
 		commonResponseErrorProcessing (response, err)
 		return

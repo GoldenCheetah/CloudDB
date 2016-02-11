@@ -45,15 +45,16 @@ type CommonEntityHeader struct {
 
 // Internal Structure for Header
 type CommonAPIHeaderV1 struct {
-	Id          int64                `json:"id"`
-	Name        string        `json:"name"`
-	Description string      `json:"description"`
-	GcVersion   string      `json:"gcversion"`
+	Id          int64	`json:"id"`
+	Key         string      `json:"key"`
+	Name        string      `json:"name"`
+	Description string     	`json:"description"`
+	GcVersion   string     	`json:"gcversion"`
 	LastChanged string      `json:"lastChange"`
-	CreatorId   string      `json:"creatorId"`
+	CreatorId   string     	`json:"creatorId"`
 	Language    string      `json:"language"`
-	Curated     bool                `json:"curated"`
-	Deleted     bool                `json:"deleted"`
+	Curated     bool        `json:"curated"`
+	Deleted     bool        `json:"deleted"`
 }
 
 func mapAPItoDBCommonHeader(api *CommonAPIHeaderV1, db *CommonEntityHeader) {

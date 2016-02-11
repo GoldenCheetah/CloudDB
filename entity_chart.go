@@ -167,7 +167,7 @@ func updateChart(request *restful.Request, response *restful.Response) {
 	}
 
 	if (chart.Header.Id == 0) {
-		addPlainTextError(response, http.StatusBadRequest, "Mandatory Id/Key for Update is missing or invalid")
+		addPlainTextError(response, http.StatusBadRequest, "Mandatory Id for Update is missing or invalid")
 		return
 	}
 
@@ -301,7 +301,7 @@ func curateChartById(request *restful.Request, response *restful.Response) {
 // ------------------- supporting functions ------------------------------------------------
 
 func changeChartById(request *restful.Request, response *restful.Response, changeDeleted bool, changeCurated bool, newStatus bool) {
-	c := appengine.NewContext(request.Request)
+	ctx := appengine.NewContext(request.Request)
 
 	id := request.PathParameter("id")
 	i, err := strconv.ParseInt(id, 10, 64)
@@ -310,10 +310,10 @@ func changeChartById(request *restful.Request, response *restful.Response, chang
 		return
 	}
 
-	key := datastore.NewKey(c, chartDBEntity, "", i, chartEntityRootKey(c))
+	key := datastore.NewKey(ctx, chartDBEntity, "", i, chartEntityRootKey(ctx))
 
 	chartDB := new(ChartEntity)
-	err = datastore.Get(c, key, chartDB)
+	err = datastore.Get(ctx, key, chartDB)
 	if err != nil && !isErrFieldMismatch(err) {
 		commonResponseErrorProcessing (response, err)
 		return
@@ -335,7 +335,7 @@ func changeChartById(request *restful.Request, response *restful.Response, chang
 		chartDB.Header.LastChanged = time.Now()
 	}
 
-	if _, err := datastore.Put(c, key, chartDB); err != nil {
+	if _, err := datastore.Put(ctx, key, chartDB); err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
 			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")

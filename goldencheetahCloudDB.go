@@ -112,24 +112,24 @@ func init() {
 	Operation("updateUserMetric").
 	Reads(UserMetricAPIv1{})) // from the request
 
-	ws.Route(ws.GET("/usermetric/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getUserMetricById).
+	ws.Route(ws.GET("/usermetric/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getUserMetricByKey).
 	// docs
 	Doc("get a usermetric").
 	Operation("getUserMetricbyId").
-	Param(ws.PathParameter("id", "identifier of the user metric").DataType("string")).
+	Param(ws.PathParameter("key", "identifier of the user metric").DataType("string")).
 	Writes(UserMetricAPIv1{})) // on the response
 
-	ws.Route(ws.DELETE("/usermetric/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(deleteUserMetricById).
+	ws.Route(ws.DELETE("/usermetric/{key}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(deleteUserMetricByKey).
 	// docs
 	Doc("delete a usermetric by setting the deleted status").
-	Operation("deleteUserMetricbyId").
-	Param(ws.PathParameter("id", "identifier of the usermetric").DataType("string")))
+	Operation("deleteUserMetricbyKey").
+	Param(ws.PathParameter("key", "identifier of the usermetric").DataType("string")))
 
-	ws.Route(ws.PUT("/usermetriccuration/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(curateUserMetricById).
+	ws.Route(ws.PUT("/usermetriccuration/{key}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(curateUserMetricByKey).
 	// docs
 	Doc("set the curation status of the usermetric to {newStatus} which must be 'true' or 'false' ").
 	Operation("updateUserMetricCurationStatus").
-	Param(ws.PathParameter("id", "identifier of the usermetric").DataType("string")).
+	Param(ws.PathParameter("key", "identifier of the usermetric").DataType("string")).
 	Param(ws.QueryParameter("newStatus", "true/false curation status").DataType("bool")))
 
 	// Endpoint for ChartHeader only (no JPG or LTMSettings)
