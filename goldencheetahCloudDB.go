@@ -37,6 +37,7 @@ func init() {
 
 	// ----------------------------------------------------------------------------------
 	// setup the charts endpoints - processing see "entity_charts.go"
+	// THESE CHART API's will be deprecated with 4.0 final release !!!!!!!!!!!!!!!!!!!!!!
 	// ----------------------------------------------------------------------------------
 	ws.
 	Path("/v1").
@@ -90,6 +91,63 @@ func init() {
 	Doc("gets the number of chart headers for testing,... selection").
 	Operation("getChartHeader").
 	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")))
+
+	// ----------------------------------------------------------------------------------
+	// setup the gcharts endpoints - processing see "entity_gcharts.go"
+	// ----------------------------------------------------------------------------------
+	ws.
+	Path("/v1").
+	Doc("Manage GCharts").
+	Consumes(restful.MIME_JSON).
+	Produces(restful.MIME_JSON) // you can specify this per route as well
+
+	ws.Route(ws.POST("/gchart/").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(insertGChart).
+	// docs
+	Doc("creates a gchart").
+	Operation("createGChart").
+	Reads(GChartAPIv1{})) // from the request
+
+	ws.Route(ws.PUT("/gchart/").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(updateGChart).
+	// docs
+	Doc("updates a gchart").
+	Operation("updatedGChart").
+	Reads(GChartAPIv1{})) // from the request
+
+	ws.Route(ws.GET("/gchart/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getGChartById).
+	// docs
+	Doc("get a gchart").
+	Operation("getGChartbyId").
+	Param(ws.PathParameter("id", "identifier of the gchart").DataType("string")).
+	Writes(GChartAPIv1{})) // on the response
+
+	ws.Route(ws.DELETE("/gchart/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(deleteGChartById).
+	// docs
+	Doc("delete a gchart by setting the deleted status").
+	Operation("deleteGChartbyId").
+	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")))
+
+	ws.Route(ws.PUT("/gchartcuration/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(curateGChartById).
+	// docs
+	Doc("set the curation status of the gchart to {newStatus} which must be 'true' or 'false' ").
+	Operation("updateGChartCurationStatus").
+	Param(ws.PathParameter("id", "identifier of the gchart").DataType("string")).
+	Param(ws.QueryParameter("newStatus", "true/false curation status").DataType("bool")))
+
+	// Endpoint for GChartHeader only (no JPG or Definition)
+	ws.Route(ws.GET("/gchartheader").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getGChartHeader).
+	// docs
+	Doc("gets a collection of gcharts header - in buckets of x charts - table sort is new to old").
+	Operation("getGChartHeader").
+	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")).
+	Writes(GChartAPIv1HeaderOnlyList{})) // on the response
+
+	// Count Chart Headers to be retrieved
+	ws.Route(ws.GET("/gchartheader/count").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getGChartHeaderCount).
+	// docs
+	Doc("gets the number of gchart headers for testing,... selection").
+	Operation("getGChartHeader").
+	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")))
+
 
 	// ----------------------------------------------------------------------------------
 	// setup the usermetric endpoints - processing see "entity_usermetric.go"
