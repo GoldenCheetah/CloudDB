@@ -39,6 +39,7 @@ import (
 // ---------------------------------------------------------------------------------------------------------------//
 type GChartEntity struct {
 	Header       CommonEntityHeader
+	ChartSport   string       `datastore:",noindex"`
 	ChartType    string       `datastore:",noindex"`
 	ChartView    string       `datastore:",noindex"`
 	ChartDef     string       `datastore:",noindex"`
@@ -49,6 +50,9 @@ type GChartEntity struct {
 
 type GChartEntityHeaderOnly struct {
 	Header CommonEntityHeader
+	ChartSport string
+	ChartType  string
+	ChartView  string
 }
 
 
@@ -59,6 +63,7 @@ type GChartEntityHeaderOnly struct {
 // Full structure for GET and PUT
 type GChartAPIv1 struct {
 	Header       CommonAPIHeaderV1 `json:"header"`
+	ChartSport   string      `json:"chartSport"`
 	ChartType    string      `json:"chartType"`
 	ChartView    string      `json:"chartView"`
 	ChartDef     string      `json:"chartDef"`
@@ -72,6 +77,9 @@ type GChartAPIv1List []GChartAPIv1
 // Header only structure
 type GChartAPIv1HeaderOnly struct {
 	Header CommonAPIHeaderV1 `json:"header"`
+	ChartSport   string      `json:"chartSport"`
+	ChartType    string      `json:"chartType"`
+	ChartView    string      `json:"chartView"`
 }
 type GChartAPIv1HeaderOnlyList []GChartAPIv1HeaderOnly
 
@@ -86,6 +94,7 @@ const gChartDBEntityRootKey = "gchartsroot"
 
 func mapAPItoDBGChart(api *GChartAPIv1, db *GChartEntity) {
 	mapAPItoDBCommonHeader(&api.Header, &db.Header)
+	db.ChartSport = api.ChartSport
 	db.ChartType = api.ChartType
 	db.ChartView = api.ChartView
 	db.ChartDef = api.ChartDef
@@ -102,6 +111,7 @@ func mapAPItoDBGChart(api *GChartAPIv1, db *GChartEntity) {
 
 func mapDBtoAPIGChart(db *GChartEntity, api *GChartAPIv1) {
 	mapDBtoAPICommonHeader(&db.Header, &api.Header)
+	api.ChartSport = db.ChartSport
 	api.ChartType = db.ChartType
 	api.ChartView = db.ChartView
 	api.ChartDef = db.ChartDef
@@ -232,6 +242,9 @@ func getGChartHeader(request *restful.Request, response *restful.Response) {
 		var chart GChartAPIv1HeaderOnly
 		mapDBtoAPICommonHeader(&chartDB.Header, &chart.Header)
 		chart.Header.Id = k[i].IntID()
+		chart.ChartSport = chartDB.ChartSport
+		chart.ChartView = chartDB.ChartView
+		chart.ChartType = chartDB.ChartType
 		chartHeaderList = append(chartHeaderList, chart)
 	}
 
