@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Joern Rischmueller (joern.rm@gmail.com)
+ * Copyright (c) 2015, 2016, 2017 Joern Rischmueller (joern.rm@gmail.com)
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU Affero General Public License as
@@ -36,63 +36,6 @@ func init() {
 	ws := new(restful.WebService)
 
 	// ----------------------------------------------------------------------------------
-	// setup the charts endpoints - processing see "entity_charts.go"
-	// THESE CHART API's will be deprecated with 4.0 final release !!!!!!!!!!!!!!!!!!!!!!
-	// ----------------------------------------------------------------------------------
-	ws.
-	Path("/v1").
-	Doc("Manage Charts").
-	Consumes(restful.MIME_JSON).
-	Produces(restful.MIME_JSON) // you can specify this per route as well
-
-	ws.Route(ws.POST("/chart/").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(insertChart).
-	// docs
-	Doc("creates a chart").
-	Operation("createChart").
-	Reads(ChartAPIv1{})) // from the request
-
-	ws.Route(ws.PUT("/chart/").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(updateChart).
-	// docs
-	Doc("updates a chart").
-	Operation("updatedChart").
-	Reads(ChartAPIv1{})) // from the request
-
-	ws.Route(ws.GET("/chart/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getChartById).
-	// docs
-	Doc("get a chart").
-	Operation("getChartbyId").
-	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")).
-	Writes(ChartAPIv1{})) // on the response
-
-	ws.Route(ws.DELETE("/chart/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(deleteChartById).
-	// docs
-	Doc("delete a chart by setting the deleted status").
-	Operation("deleteChartbyId").
-	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")))
-
-	ws.Route(ws.PUT("/chartcuration/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(curateChartById).
-	// docs
-	Doc("set the curation status of the chart to {newStatus} which must be 'true' or 'false' ").
-	Operation("updateChartCurationStatus").
-	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")).
-	Param(ws.QueryParameter("newStatus", "true/false curation status").DataType("bool")))
-
-	// Endpoint for ChartHeader only (no JPG or LTMSettings)
-	ws.Route(ws.GET("/chartheader").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getChartHeader).
-	// docs
-	Doc("gets a collection of charts header - in buckets of x charts - table sort is new to old").
-	Operation("getChartHeader").
-	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")).
-	Writes(ChartAPIv1HeaderOnlyList{})) // on the response
-
-	// Count Chart Headers to be retrieved
-	ws.Route(ws.GET("/chartheader/count").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getChartHeaderCount).
-	// docs
-	Doc("gets the number of chart headers for testing,... selection").
-	Operation("getChartHeader").
-	Param(ws.QueryParameter("dateFrom", "Date of last change").DataType("string")))
-
-	// ----------------------------------------------------------------------------------
 	// setup the gcharts endpoints - processing see "entity_gcharts.go"
 	// ----------------------------------------------------------------------------------
 	ws.
@@ -105,20 +48,26 @@ func init() {
 	// docs
 	Doc("creates a gchart").
 	Operation("createGChart").
-	Reads(GChartAPIv1{})) // from the request
+	Reads(GChartPostAPIv1{})) // from the request
 
 	ws.Route(ws.PUT("/gchart/").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(updateGChart).
 	// docs
 	Doc("updates a gchart").
 	Operation("updatedGChart").
-	Reads(GChartAPIv1{})) // from the request
+	Reads(GChartPostAPIv1{})) // from the request
 
 	ws.Route(ws.GET("/gchart/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(getGChartById).
 	// docs
 	Doc("get a gchart").
 	Operation("getGChartbyId").
 	Param(ws.PathParameter("id", "identifier of the gchart").DataType("string")).
-	Writes(GChartAPIv1{})) // on the response
+	Writes(GChartGetAPIv1{})) // on the response
+
+	ws.Route(ws.PUT("/gchartuse/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(incrementGChartUsageById).
+	// docs
+	Doc("increments the DL use counter for a chart by 1").
+	Operation("incrementUsageCounterById").
+	Param(ws.PathParameter("id", "identifier of the gchart").DataType("string")))
 
 	ws.Route(ws.DELETE("/gchart/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(deleteGChartById).
 	// docs
@@ -248,9 +197,55 @@ func init() {
 	// docs
 	Doc("gets the text for a specific status entity").
 	Operation("getStatusText").
-	Param(ws.PathParameter("id", "identifier of the chart").DataType("string")).
+	Param(ws.PathParameter("id", "identifier of the version text").DataType("string")).
 	Writes(StatusEntityGetTextAPIv1{})) // on the response
 
+	// ----------------------------------------------------------------------------------
+	// setup the version endpoints - processing see "entity_version.go"
+	// ----------------------------------------------------------------------------------
+
+	ws.Route(ws.POST("/version").Filter(basicAuthenticate).To(insertVersion).
+	// docs
+		Doc("creates a new version entity").
+		Operation("createVersion").
+		Reads(VersionEntityPostAPIv1{})) // from the request
+
+	ws.Route(ws.GET("/version").Filter(basicAuthenticate).To(getVersion).
+	// docs
+		Doc("gets a collection of versions").
+		Operation("getVersion").
+		Param(ws.QueryParameter("dateFrom", "Version Validity").DataType("string")).
+		Writes(VersionEntityGetAPIv1List{})) // on the response
+
+	ws.Route(ws.GET("/version/latest").Filter(basicAuthenticate).To(getLatestVersion).
+	// docs
+		Doc("gets the latest version").
+		Operation("getVersion").
+		Writes(VersionEntityGetAPIv1{})) // on the response
+
+	ws.Route(ws.GET("/versiontext/{id}").Filter(basicAuthenticate).To(getVersionTextById).
+	// docs
+		Doc("gets the text for a specific version entity").
+		Operation("getVersionText").
+		Param(ws.PathParameter("id", "identifier of the version text").DataType("string")).
+		Writes(VersionEntityGetTextAPIv1{})) // on the response
+
+	// ----------------------------------------------------------------------------------
+	// setup the telemetry endpoints - processing see "entity_telemetry.go"
+	// ----------------------------------------------------------------------------------
+
+	ws.Route(ws.POST("/telemetry").Filter(basicAuthenticate).To(insertTelemetry).
+	// docs
+		Doc("stores location,... of the call based on IP adress").
+		Operation("post telemetry data").
+		Reads(TelemetryEntityPostAPIv1{})) // from the request
+
+	ws.Route(ws.GET("/telemetry").Filter(basicAuthenticate).To(getTelemetry).
+	// docs
+		Doc("gets a collection of versions").
+		Operation("get All Telemetry Data").
+		Param(ws.QueryParameter("dateFrom", "Telemetry created after").DataType("string")).
+		Writes(TelemetryEntityGetAPIv1List{})) // on the response
 
 	// all routes defined - let's go
 
@@ -263,6 +258,10 @@ func init() {
 const basicauth = "Basic_Auth"
 const authorization = "Authorization"
 const dateTimeLayout = "2006-01-02T15:04:05Z"
+const (
+	http_UnprocessableEntity = 422
+)
+const status_unprocessable = "Error - CloudDB Status does not allow processing the request"
 
 
 func basicAuthenticate(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {

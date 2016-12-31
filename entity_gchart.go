@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	b64 "encoding/base64"
 
@@ -46,6 +47,7 @@ type GChartEntity struct {
 	Image        []byte       `datastore:",noindex"`
 	CreatorNick  string       `datastore:",noindex"`
 	CreatorEmail string       `datastore:",noindex"`
+	Internal     GChartEntityInternal
 }
 
 type GChartEntityHeaderOnly struct {
@@ -55,13 +57,31 @@ type GChartEntityHeaderOnly struct {
 	ChartView  string
 }
 
+// Internal attributes which must not be filled by POST or PUT (but are returned on GET)
+type GChartEntityInternal struct {
+	DLCounter   int             `datastore:",noindex"`
+}
+
 
 // ---------------------------------------------------------------------------------------------------------------//
 // API View Definition
 // ---------------------------------------------------------------------------------------------------------------//
 
-// Full structure for GET and PUT
-type GChartAPIv1 struct {
+// Full structure for GET
+type GChartGetAPIv1 struct {
+	Header       CommonAPIHeaderV1 `json:"header"`
+	ChartSport   string      `json:"chartSport"`
+	ChartType    string      `json:"chartType"`
+	ChartView    string      `json:"chartView"`
+	ChartDef     string      `json:"chartDef"`
+	Image        string      `json:"image"`
+	CreatorNick  string      `json:"creatorNick"`
+	CreatorEmail string      `json:"creatorEmail"`
+	DLCounter    int         `json:"downloadCount"`
+}
+
+// Reduced structure for POST and PUT (without internal fields)
+type GChartPostAPIv1 struct {
 	Header       CommonAPIHeaderV1 `json:"header"`
 	ChartSport   string      `json:"chartSport"`
 	ChartType    string      `json:"chartType"`
@@ -72,7 +92,8 @@ type GChartAPIv1 struct {
 	CreatorEmail string      `json:"creatorEmail"`
 }
 
-type GChartAPIv1List []GChartAPIv1
+
+type GChartGetAPIv1List []GChartGetAPIv1
 
 // Header only structure
 type GChartAPIv1HeaderOnly struct {
@@ -92,7 +113,7 @@ type GChartAPIv1HeaderOnlyList []GChartAPIv1HeaderOnly
 const gChartDBEntity = "gchartentity"
 const gChartDBEntityRootKey = "gchartsroot"
 
-func mapAPItoDBGChart(api *GChartAPIv1, db *GChartEntity) {
+func mapAPItoDBGChart(api *GChartPostAPIv1, db *GChartEntity) {
 	mapAPItoDBCommonHeader(&api.Header, &db.Header)
 	db.ChartSport = api.ChartSport
 	db.ChartType = api.ChartType
@@ -109,7 +130,7 @@ func mapAPItoDBGChart(api *GChartAPIv1, db *GChartEntity) {
 }
 
 
-func mapDBtoAPIGChart(db *GChartEntity, api *GChartAPIv1) {
+func mapDBtoAPIGChart(db *GChartEntity, api *GChartGetAPIv1) {
 	mapDBtoAPICommonHeader(&db.Header, &api.Header)
 	api.ChartSport = db.ChartSport
 	api.ChartType = db.ChartType
@@ -118,6 +139,7 @@ func mapDBtoAPIGChart(db *GChartEntity, api *GChartAPIv1) {
 	api.Image = b64.StdEncoding.EncodeToString(db.Image)
 	api.CreatorNick = db.CreatorNick
 	api.CreatorEmail = db.CreatorEmail
+	api.DLCounter = db.Internal.DLCounter
 }
 
 
@@ -136,7 +158,7 @@ func gchartEntityRootKey(ctx context.Context) *datastore.Key {
 func insertGChart(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	chart := new(GChartAPIv1)
+	chart := new(GChartPostAPIv1)
 	if err := request.ReadEntity(chart); err != nil {
 		addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		return
@@ -152,6 +174,7 @@ func insertGChart(request *restful.Request, response *restful.Response) {
 	chartDB.Header.LastChanged = time.Now()
 	chartDB.Header.Curated = false
 	chartDB.Header.Deleted = false
+	chartDB.Internal.DLCounter = 0
 
 	// auto-curate if a registered "curator" is adding a gchart
 	curatorQuery := datastore.NewQuery(curatorDBEntity).Filter("CuratorId =", chartDB.Header.CreatorId)
@@ -178,14 +201,24 @@ func insertGChart(request *restful.Request, response *restful.Response) {
 func updateGChart(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	chart := new(GChartAPIv1)
+	chart := new(GChartPostAPIv1)
 	if err := request.ReadEntity(chart); err != nil {
 		addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	if (chart.Header.Id == 0) {
+	if chart.Header.Id == 0 {
 		addPlainTextError(response, http.StatusBadRequest, "Mandatory Id for Update is missing or invalid")
+		return
+	}
+
+	key := datastore.NewKey(ctx, gChartDBEntity, "", chart.Header.Id, gchartEntityRootKey(ctx))
+
+	// get the current chart to retrieve the current DL counter
+	currentChartDB := new(GChartEntity)
+	err := datastore.Get(ctx, key, currentChartDB)
+	if err != nil && !isErrFieldMismatch(err) {
+		commonResponseErrorProcessing(response, err)
 		return
 	}
 
@@ -194,12 +227,11 @@ func updateGChart(request *restful.Request, response *restful.Response) {
 
 	chartDB := new(GChartEntity)
 	mapAPItoDBGChart(chart, chartDB)
-
+	chartDB.Internal.DLCounter = currentChartDB.Internal.DLCounter
 	chartDB.Header.LastChanged = time.Now()
 
 	// and now store it
 
-	key := datastore.NewKey(ctx, gChartDBEntity, "", chart.Header.Id, gchartEntityRootKey(ctx))
 	if _, err := datastore.Put(ctx, key, chartDB); err != nil {
 		commonResponseErrorProcessing (response, err)
 		return
@@ -214,7 +246,8 @@ func getGChartHeader(request *restful.Request, response *restful.Response) {
 
 	var date time.Time
 	var err error
-	if dateString := request.QueryParameter("dateFrom"); dateString != "" {
+	var dateString string
+	if dateString = request.QueryParameter("dateFrom"); dateString != "" {
 		date, err = time.Parse(time.RFC3339, dateString)
 		if err != nil {
 			addPlainTextError(response, http.StatusBadRequest, fmt.Sprint(err.Error(), " - Correct format is RFC3339"))
@@ -247,6 +280,9 @@ func getGChartHeader(request *restful.Request, response *restful.Response) {
 		chart.ChartType = chartDB.ChartType
 		chartHeaderList = append(chartHeaderList, chart)
 	}
+
+	// write Info Log
+	log.Infof(ctx, "GetHeader from: %s", dateString )
 
 	response.WriteHeaderAndEntity(http.StatusOK, chartHeaderList)
 
@@ -294,7 +330,7 @@ func getGChartById(request *restful.Request, response *restful.Response) {
 	}
 
 	// now map and respond
-	chart := new(GChartAPIv1)
+	chart := new(GChartGetAPIv1)
 	mapDBtoAPIGChart(chartDB, chart)
 	chart.Header.Id = key.IntID()
 
@@ -304,6 +340,34 @@ func getGChartById(request *restful.Request, response *restful.Response) {
 func deleteGChartById(request *restful.Request, response *restful.Response) {
 
 	changeGChartById(request, response, true, false, true)
+
+}
+
+func incrementGChartUsageById(request *restful.Request, response *restful.Response) {
+
+	ctx := appengine.NewContext(request.Request)
+
+	id := request.PathParameter("id")
+	i, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		commonResponseErrorProcessing (response, err)
+		return
+	}
+
+	key := datastore.NewKey(ctx, gChartDBEntity, "", i, gchartEntityRootKey(ctx))
+
+	chartDB := new(GChartEntity)
+	err = datastore.Get(ctx, key, chartDB)
+	if err != nil && !isErrFieldMismatch(err) {
+		commonResponseErrorProcessing (response, err)
+		return
+	}
+
+	// update the download counter but ignore any errors on writing
+	chartDB.Internal.DLCounter += 1
+	datastore.Put(ctx, key, chartDB)
+
+	response.WriteHeaderAndEntity(http.StatusNoContent, "")
 
 }
 

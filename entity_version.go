@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Joern Rischmueller (joern.rm@gmail.com)
+ * Copyright (c) 2016 Joern Rischmueller (joern.rm@gmail.com)
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU Affero General Public License as
@@ -34,23 +34,24 @@ import (
 
 
 // ---------------------------------------------------------------------------------------------------------------//
-// Golden Cheetah curator (statusentity) which is stored in DB
+// Golden Cheetah curator (versionentity) which is stored in DB
 // ---------------------------------------------------------------------------------------------------------------//
-type StatusEntity struct {
-	Status     int
+type VersionEntity struct {
+	Version    int
 	ChangeDate time.Time
+	Type       int
 }
 
 // Constants defined for documentation purposes - as they are set by GC
 const (
-	Status_Ok = 10
-	Status_PartialFailure = 20
-	Status_Outage = 30
+	Version_Release = 10
+	Version_Release_Candidate = 20
+	Version_Development_Build = 30
+	Version_Not_Found = 9999
 )
 
 
-
-type StatusEntityText struct {
+type VersionEntityText struct {
 	Text string                 `datastore:",noindex"`
 }
 
@@ -59,42 +60,42 @@ type StatusEntityText struct {
 // ---------------------------------------------------------------------------------------------------------------//
 
 // Full structure for POST/PUT
-type StatusEntityPostAPIv1 struct {
+type VersionEntityPostAPIv1 struct {
 	Id         int64        `json:"id"`
-	Status     int        `json:"status"`
-	ChangeDate string        `json:"changeDate"`
+	Version    int          `json:"version"`
+	ChangeDate string       `json:"changeDate"`
 	Text       string       `json:"text"`
 }
 
-type StatusEntityGetAPIv1 struct {
+type VersionEntityGetAPIv1 struct {
 	Id         int64        `json:"id"`
-	Status     int        `json:"status"`
-	ChangeDate string        `json:"changeDate"`
+	Version    int          `json:"version"`
+	ChangeDate string       `json:"changeDate"`
 }
 
-type StatusEntityGetTextAPIv1 struct {
+type VersionEntityGetTextAPIv1 struct {
 	Id   int64        `json:"id"`
 	Text string       `json:"text"`
 }
 
-type StatusEntityGetAPIv1List []StatusEntityGetAPIv1
+type VersionEntityGetAPIv1List []VersionEntityGetAPIv1
 
 // ---------------------------------------------------------------------------------------------------------------//
 // Memcache constants
 // ---------------------------------------------------------------------------------------------------------------//
 
-const statusMemcacheKey = "currentstatus"
+const versionMemcacheKey = "latestversion"
 
 // ---------------------------------------------------------------------------------------------------------------//
 // Data Storage View
 // ---------------------------------------------------------------------------------------------------------------//
 
-const statusDBEntityRootKey = "statusroot"
-const statusDBEntity = "statusentity"
-const statusDBEntityText = "statusText"
+const versionDBEntityRootKey = "versionroot"
+const versionDBEntity = "versionentity"
+const versionDBEntityText = "versionText"
 
-func mapAPItoDBStatus(api *StatusEntityPostAPIv1, db *StatusEntity) {
-	db.Status = api.Status
+func mapAPItoDBVersion(api *VersionEntityPostAPIv1, db *VersionEntity) {
+	db.Version = api.Version
 	if api.ChangeDate != "" {
 		db.ChangeDate, _ = time.Parse(dateTimeLayout, api.ChangeDate)
 	} else {
@@ -103,28 +104,28 @@ func mapAPItoDBStatus(api *StatusEntityPostAPIv1, db *StatusEntity) {
 
 }
 
-func mapDBtoAPIStatus(db *StatusEntity, api *StatusEntityGetAPIv1) {
-	api.Status = db.Status
+func mapDBtoAPIVersion(db *VersionEntity, api *VersionEntityGetAPIv1) {
+	api.Version = db.Version
 	api.ChangeDate = db.ChangeDate.Format(dateTimeLayout)
 }
 
 
 // supporting functions
 
-// statusEntityKey returns the key used for all statusEntity entries.
-func statusEntityRootKey(ctx context.Context) *datastore.Key {
-	return datastore.NewKey(ctx, statusDBEntity, statusDBEntityRootKey, 0, nil)
+// versionEntityKey returns the key used for all versionEntity entries.
+func versionEntityRootKey(ctx context.Context) *datastore.Key {
+	return datastore.NewKey(ctx, versionDBEntity, versionDBEntityRootKey, 0, nil)
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
 // request/response handler
 // ---------------------------------------------------------------------------------------------------------------//
 
-func insertStatus(request *restful.Request, response *restful.Response) {
+func insertVersion(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	status := new(StatusEntityPostAPIv1)
-	if err := request.ReadEntity(status); err != nil {
+	version := new(VersionEntityPostAPIv1)
+	if err := request.ReadEntity(version); err != nil {
 		addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -132,12 +133,12 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 	// No checks if the necessary fields are filed or not - since GoldenCheetah is
 	// the only consumer of the APIs - any checks/response are to support this use-case
 
-	statusDB := new(StatusEntity)
-	mapAPItoDBStatus(status, statusDB)
+	versionDB := new(VersionEntity)
+	mapAPItoDBVersion(version, versionDB)
 
 	// and now store it
-	key := datastore.NewIncompleteKey(ctx, statusDBEntity, statusEntityRootKey(ctx))
-	key, err := datastore.Put(ctx, key, statusDB);
+	key := datastore.NewIncompleteKey(ctx, versionDBEntity, versionEntityRootKey(ctx))
+	key, err := datastore.Put(ctx, key, versionDB)
 	if err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
@@ -148,12 +149,12 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 		return
 	}
 
-	if status.Text != "" {
-		statusDBText := new(StatusEntityText)
-		statusDBText.Text = status.Text
-		// and now store it as child of statusEntry
-		key := datastore.NewIncompleteKey(ctx, statusDBEntityText, key)
-		key, err := datastore.Put(ctx, key, statusDBText);
+	if version.Text != "" {
+		versionDBText := new(VersionEntityText)
+		versionDBText.Text = version.Text
+		// and now store it as child of versionEntry
+		key := datastore.NewIncompleteKey(ctx, versionDBEntityText, key)
+		key, err := datastore.Put(ctx, key, versionDBText)
 		if err != nil {
 			if appengine.IsOverQuota(err) {
 				// return 503 and a text similar to what GAE is returning as well
@@ -165,14 +166,14 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 		}
 	}
 
-	var in StatusEntityGetAPIv1
+	var in VersionEntityGetAPIv1
 	in.Id = key.IntID()
-	in.Status = status.Status
-	in.ChangeDate = status.ChangeDate
+	in.Version = version.Version
+	in.ChangeDate = version.ChangeDate
 
 	// add to memcache / overwrite existing / ignore errors
 	item := &memcache.Item{
-		Key:   statusMemcacheKey,
+		Key:   versionMemcacheKey,
 		Object: in,
 	}
 	memcache.Gob.Set(ctx, item)
@@ -182,7 +183,7 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 
 }
 
-func getStatus(request *restful.Request, response *restful.Response) {
+func getVersion(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
 	var date time.Time
@@ -197,12 +198,12 @@ func getStatus(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	q := datastore.NewQuery(statusDBEntity).Filter("ChangeDate >=", date).Order("-ChangeDate")
+	q := datastore.NewQuery(versionDBEntity).Filter("ChangeDate >=", date).Order("-ChangeDate")
 
-	var statusList StatusEntityGetAPIv1List
+	var versionList VersionEntityGetAPIv1List
 
-	var statusOnDBList []StatusEntity
-	k, err := q.GetAll(ctx, &statusOnDBList)
+	var versionOnDBList []VersionEntity
+	k, err := q.GetAll(ctx, &versionOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
@@ -214,31 +215,31 @@ func getStatus(request *restful.Request, response *restful.Response) {
 	}
 
 	// DB Entity needs to be mapped back
-	for i, statusDB := range statusOnDBList {
-		var statusAPI StatusEntityGetAPIv1
-		mapDBtoAPIStatus(&statusDB, &statusAPI)
-		statusAPI.Id = k[i].IntID()
-		statusList = append(statusList, statusAPI)
+	for i, versionDB := range versionOnDBList {
+		var versionAPI VersionEntityGetAPIv1
+		mapDBtoAPIVersion(&versionDB, &versionAPI)
+		versionAPI.Id = k[i].IntID()
+		versionList = append(versionList, versionAPI)
 	}
 
-	response.WriteHeaderAndEntity(http.StatusOK, statusList)
+	response.WriteHeaderAndEntity(http.StatusOK, versionList)
 }
 
-func getCurrentStatus(request *restful.Request, response *restful.Response) {
+func getLatestVersion(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	var statusAPI StatusEntityGetAPIv1
+	var versionAPI VersionEntityGetAPIv1
 
 	// first check Memcache
-	if _, err := memcache.Gob.Get(ctx, statusMemcacheKey, &statusAPI); err == nil {
-		response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
+	if _, err := memcache.Gob.Get(ctx, versionMemcacheKey, &versionAPI); err == nil {
+		response.WriteHeaderAndEntity(http.StatusOK, versionAPI)
 		return
 	}
 
-	q := datastore.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
+	q := datastore.NewQuery(versionDBEntity).Order("-ChangeDate").Limit(1)
 
-	var statusOnDBList []StatusEntity
-	k, err := q.GetAll(ctx, &statusOnDBList)
+	var versionOnDBList []VersionEntity
+	k, err := q.GetAll(ctx, &versionOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
@@ -250,20 +251,20 @@ func getCurrentStatus(request *restful.Request, response *restful.Response) {
 	}
 
 	// DB Entity needs to be mapped back
-	mapDBtoAPIStatus(&statusOnDBList[0], &statusAPI)
-	statusAPI.Id = k[0].IntID()
+	mapDBtoAPIVersion(&versionOnDBList[0], &versionAPI)
+	versionAPI.Id = k[0].IntID()
 
 	// add to memcache / overwrite existing / ignore errors
 	item := &memcache.Item{
-		Key:   statusMemcacheKey,
-		Object: statusAPI,
+		Key:   versionMemcacheKey,
+		Object: versionAPI,
 	}
 	memcache.Gob.Set(ctx, item)
 
-	response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
+	response.WriteHeaderAndEntity(http.StatusOK, versionAPI)
 }
 
-func getStatusTextById(request *restful.Request, response *restful.Response) {
+func getVersionTextById(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
 	id := request.PathParameter("id")
@@ -273,12 +274,12 @@ func getStatusTextById(request *restful.Request, response *restful.Response) {
 		return
 	}
 
-	statusKey := datastore.NewKey(ctx, statusDBEntity, "", i, statusEntityRootKey(ctx))
+	versionKey := datastore.NewKey(ctx, versionDBEntity, "", i, versionEntityRootKey(ctx))
 
-	q := datastore.NewQuery(statusDBEntityText).Ancestor(statusKey).Limit(1) // we have max. 1 Text per status
+	q := datastore.NewQuery(versionDBEntityText).Ancestor(versionKey).Limit(1) // we have max. 1 Text per version
 
-	var statusTextOnDBList []StatusEntityText
-	k, err := q.GetAll(ctx, &statusTextOnDBList)
+	var versionTextOnDBList []VersionEntityText
+	k, err := q.GetAll(ctx, &versionTextOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
@@ -290,38 +291,15 @@ func getStatusTextById(request *restful.Request, response *restful.Response) {
 	}
 
 	// DB Entity needs to be mapped back
-	var statusAPI StatusEntityGetTextAPIv1
-	statusAPI.Id = k[0].IntID()
-	statusAPI.Text = statusTextOnDBList[0].Text
+	var versionAPI VersionEntityGetTextAPIv1
+	versionAPI.Id = k[0].IntID()
+	versionAPI.Text = versionTextOnDBList[0].Text
 
-	response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
+	response.WriteHeaderAndEntity(http.StatusOK, versionAPI)
 
 }
 
-//---------------------------------------------------------------------------------------
-// internal functions
-//---------------------------------------------------------------------------------------
 
-func internalGetCurrentStatus(ctx context.Context) int {
-
-	// first check Memcache
-	if item, err := memcache.Get(ctx, statusMemcacheKey); err == nil {
-		if i64, err := strconv.ParseInt(string(item.Value), 10, 0); err == nil {
-			return int(i64)
-		}
-	}
-
-	q := datastore.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
-
-	var statusOnDBList []StatusEntity
-	_, err := q.GetAll(ctx, &statusOnDBList)
-	if (err != nil && !isErrFieldMismatch(err)) || len(statusOnDBList) == 0 {
-		// we are not blocking to due problems in Status Management
-		return Status_Ok
-	}
-
-	return statusOnDBList[0].Status
-}
 
 
 
