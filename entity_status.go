@@ -170,12 +170,8 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 	in.Status = status.Status
 	in.ChangeDate = status.ChangeDate
 
-	// add to memcache / overwrite existing / ignore errors
-	item := &memcache.Item{
-		Key:   statusMemcacheKey,
-		Object: in,
-	}
-	memcache.Gob.Set(ctx, item)
+	// flush the memcache
+	memcache.Flush(ctx)
 
 	// send back the key
 	response.WriteHeaderAndEntity(http.StatusCreated, strconv.FormatInt(key.IntID(), 10))

@@ -171,12 +171,8 @@ func insertVersion(request *restful.Request, response *restful.Response) {
 	in.Version = version.Version
 	in.ChangeDate = version.ChangeDate
 
-	// add to memcache / overwrite existing / ignore errors
-	item := &memcache.Item{
-		Key:   versionMemcacheKey,
-		Object: in,
-	}
-	memcache.Gob.Set(ctx, item)
+	// flush the memcache
+	memcache.Flush(ctx)
 
 	// send back the key
 	response.WriteHeaderAndEntity(http.StatusCreated, strconv.FormatInt(key.IntID(), 10))
