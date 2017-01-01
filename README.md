@@ -1,6 +1,5 @@
 # CloudDB
-Cloud DB is cloud based data storage extension of GoldenCheetah (which is planned to be released
-first time with GoldenCheetah Version 4.0).
+Cloud DB is cloud based data storage extension of GoldenCheetah (available in GoldenCheetah Version 3.4).
 
 It is planned to provide Cloud Database for GoldenCheetah artifacts
 
