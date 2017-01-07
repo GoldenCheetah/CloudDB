@@ -92,7 +92,7 @@ func mapAPItoDBVersion(api *VersionEntityPostAPIv1, db *VersionEntity) {
 	db.Type = api.Type
 	db.URL = api.URL
 	db.Text = api.Text
-	db.VersionText = api.Text
+	db.VersionText = api.VersionText
 }
 
 func mapDBtoAPIVersion(db *VersionEntity, api *VersionEntityGetAPIv1) {
