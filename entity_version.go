@@ -21,13 +21,11 @@ package goldencheetah
 import (
 	"net/http"
 	"strconv"
-	"time"
 	"fmt"
 
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/memcache"
 
 	"github.com/emicklei/go-restful"
 )
@@ -38,8 +36,9 @@ import (
 // ---------------------------------------------------------------------------------------------------------------//
 type VersionEntity struct {
 	Version    int
-	ChangeDate time.Time
-	Type       int
+	Type       int          `datastore:",noindex"`
+	URL        string       `datastore:",noindex"`
+	Text       string       `datastore:",noindex"`
 }
 
 // Constants defined for documentation purposes - as they are set by GC
@@ -47,7 +46,6 @@ const (
 	Version_Release = 10
 	Version_Release_Candidate = 20
 	Version_Development_Build = 30
-	Version_Not_Found = 9999
 )
 
 
@@ -61,30 +59,23 @@ type VersionEntityText struct {
 
 // Full structure for POST/PUT
 type VersionEntityPostAPIv1 struct {
-	Id         int64        `json:"id"`
 	Version    int          `json:"version"`
-	ChangeDate string       `json:"changeDate"`
+	Type       int          `json:"releaseType"`
+	URL        string       `json:"downloadURL"`
 	Text       string       `json:"text"`
 }
 
 type VersionEntityGetAPIv1 struct {
 	Id         int64        `json:"id"`
 	Version    int          `json:"version"`
-	ChangeDate string       `json:"changeDate"`
+	Type       int          `json:"releaseType"`
+	URL        string       `json:"downloadURL"`
+	Text       string       `json:"text"`
 }
 
-type VersionEntityGetTextAPIv1 struct {
-	Id   int64        `json:"id"`
-	Text string       `json:"text"`
-}
 
 type VersionEntityGetAPIv1List []VersionEntityGetAPIv1
 
-// ---------------------------------------------------------------------------------------------------------------//
-// Memcache constants
-// ---------------------------------------------------------------------------------------------------------------//
-
-const versionMemcacheKey = "latestversion"
 
 // ---------------------------------------------------------------------------------------------------------------//
 // Data Storage View
@@ -92,21 +83,19 @@ const versionMemcacheKey = "latestversion"
 
 const versionDBEntityRootKey = "versionroot"
 const versionDBEntity = "versionentity"
-const versionDBEntityText = "versionText"
 
 func mapAPItoDBVersion(api *VersionEntityPostAPIv1, db *VersionEntity) {
 	db.Version = api.Version
-	if api.ChangeDate != "" {
-		db.ChangeDate, _ = time.Parse(dateTimeLayout, api.ChangeDate)
-	} else {
-		db.ChangeDate = time.Now()
-	}
-
+	db.Type = api.Type
+	db.URL = api.URL
+	db.Text = api.Text
 }
 
 func mapDBtoAPIVersion(db *VersionEntity, api *VersionEntityGetAPIv1) {
 	api.Version = db.Version
-	api.ChangeDate = db.ChangeDate.Format(dateTimeLayout)
+	api.Type = db.Type
+	api.URL = db.URL
+	api.Text = db.Text
 }
 
 
@@ -149,31 +138,6 @@ func insertVersion(request *restful.Request, response *restful.Response) {
 		return
 	}
 
-	if version.Text != "" {
-		versionDBText := new(VersionEntityText)
-		versionDBText.Text = version.Text
-		// and now store it as child of versionEntry
-		key := datastore.NewIncompleteKey(ctx, versionDBEntityText, key)
-		key, err := datastore.Put(ctx, key, versionDBText)
-		if err != nil {
-			if appengine.IsOverQuota(err) {
-				// return 503 and a text similar to what GAE is returning as well
-				addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
-			} else {
-				addPlainTextError(response, http.StatusInternalServerError, err.Error())
-			}
-			return
-		}
-	}
-
-	var in VersionEntityGetAPIv1
-	in.Id = key.IntID()
-	in.Version = version.Version
-	in.ChangeDate = version.ChangeDate
-
-	// flush the memcache
-	memcache.Flush(ctx)
-
 	// send back the key
 	response.WriteHeaderAndEntity(http.StatusCreated, strconv.FormatInt(key.IntID(), 10))
 
@@ -182,19 +146,16 @@ func insertVersion(request *restful.Request, response *restful.Response) {
 func getVersion(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	var date time.Time
+	var version int
 	var err error
-	if dateString := request.QueryParameter("dateFrom"); dateString != "" {
-		date, err = time.Parse(time.RFC3339, dateString)
-		if err != nil {
-			addPlainTextError(response, http.StatusBadRequest, fmt.Sprint(err.Error(), " - Correct format is RFC3339"))
+	if versionString := request.QueryParameter("version"); versionString != "" {
+		if version, err = strconv.Atoi(versionString); err != nil {
+			addPlainTextError(response, http.StatusBadRequest, fmt.Sprint(err.Error(), " - Version: No integer string"))
 			return
 		}
-	} else {
-		date = time.Time{}
 	}
 
-	q := datastore.NewQuery(versionDBEntity).Filter("ChangeDate >=", date).Order("-ChangeDate")
+	q := datastore.NewQuery(versionDBEntity).Filter("Version >", version).Order("-Version")
 
 	var versionList VersionEntityGetAPIv1List
 
@@ -226,13 +187,7 @@ func getLatestVersion(request *restful.Request, response *restful.Response) {
 
 	var versionAPI VersionEntityGetAPIv1
 
-	// first check Memcache
-	if _, err := memcache.Gob.Get(ctx, versionMemcacheKey, &versionAPI); err == nil {
-		response.WriteHeaderAndEntity(http.StatusOK, versionAPI)
-		return
-	}
-
-	q := datastore.NewQuery(versionDBEntity).Order("-ChangeDate").Limit(1)
+	q := datastore.NewQuery(versionDBEntity).Order("-Version").Limit(1)
 
 	var versionOnDBList []VersionEntity
 	k, err := q.GetAll(ctx, &versionOnDBList)
@@ -250,50 +205,9 @@ func getLatestVersion(request *restful.Request, response *restful.Response) {
 	mapDBtoAPIVersion(&versionOnDBList[0], &versionAPI)
 	versionAPI.Id = k[0].IntID()
 
-	// add to memcache / overwrite existing / ignore errors
-	item := &memcache.Item{
-		Key:   versionMemcacheKey,
-		Object: versionAPI,
-	}
-	memcache.Gob.Set(ctx, item)
-
 	response.WriteHeaderAndEntity(http.StatusOK, versionAPI)
 }
 
-func getVersionTextById(request *restful.Request, response *restful.Response) {
-	ctx := appengine.NewContext(request.Request)
-
-	id := request.PathParameter("id")
-	i, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		addPlainTextError(response, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	versionKey := datastore.NewKey(ctx, versionDBEntity, "", i, versionEntityRootKey(ctx))
-
-	q := datastore.NewQuery(versionDBEntityText).Ancestor(versionKey).Limit(1) // we have max. 1 Text per version
-
-	var versionTextOnDBList []VersionEntityText
-	k, err := q.GetAll(ctx, &versionTextOnDBList)
-	if err != nil && !isErrFieldMismatch(err) {
-		if appengine.IsOverQuota(err) {
-			// return 503 and a text similar to what GAE is returning as well
-			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
-		} else {
-			addPlainTextError(response, http.StatusInternalServerError, err.Error())
-		}
-		return
-	}
-
-	// DB Entity needs to be mapped back
-	var versionAPI VersionEntityGetTextAPIv1
-	versionAPI.Id = k[0].IntID()
-	versionAPI.Text = versionTextOnDBList[0].Text
-
-	response.WriteHeaderAndEntity(http.StatusOK, versionAPI)
-
-}
 
 
 

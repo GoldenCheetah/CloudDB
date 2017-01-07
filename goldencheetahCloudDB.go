@@ -214,7 +214,7 @@ func init() {
 	// docs
 		Doc("gets a collection of versions").
 		Operation("getVersion").
-		Param(ws.QueryParameter("dateFrom", "Version Validity").DataType("string")).
+		Param(ws.QueryParameter("version", "Version").DataType("string")).
 		Writes(VersionEntityGetAPIv1List{})) // on the response
 
 	ws.Route(ws.GET("/version/latest").Filter(basicAuthenticate).To(getLatestVersion).
@@ -222,13 +222,6 @@ func init() {
 		Doc("gets the latest version").
 		Operation("getVersion").
 		Writes(VersionEntityGetAPIv1{})) // on the response
-
-	ws.Route(ws.GET("/versiontext/{id}").Filter(basicAuthenticate).To(getVersionTextById).
-	// docs
-		Doc("gets the text for a specific version entity").
-		Operation("getVersionText").
-		Param(ws.PathParameter("id", "identifier of the version text").DataType("string")).
-		Writes(VersionEntityGetTextAPIv1{})) // on the response
 
 	// ----------------------------------------------------------------------------------
 	// setup the telemetry endpoints - processing see "entity_telemetry.go"
