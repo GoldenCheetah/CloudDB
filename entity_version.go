@@ -35,10 +35,11 @@ import (
 // Golden Cheetah curator (versionentity) which is stored in DB
 // ---------------------------------------------------------------------------------------------------------------//
 type VersionEntity struct {
-	Version    int
-	Type       int          `datastore:",noindex"`
-	URL        string       `datastore:",noindex"`
-	Text       string       `datastore:",noindex"`
+	Version     int
+	Type        int          `datastore:",noindex"`
+	URL         string       `datastore:",noindex"`
+	Text        string       `datastore:",noindex"`
+	VersionText string       `datastore:",noindex"`
 }
 
 // Constants defined for documentation purposes - as they are set by GC
@@ -59,18 +60,20 @@ type VersionEntityText struct {
 
 // Full structure for POST/PUT
 type VersionEntityPostAPIv1 struct {
-	Version    int          `json:"version"`
-	Type       int          `json:"releaseType"`
-	URL        string       `json:"downloadURL"`
-	Text       string       `json:"text"`
+	Version     int          `json:"version"`
+	Type        int          `json:"releaseType"`
+	URL         string       `json:"downloadURL"`
+	VersionText string       `json:"versionText"`
+	Text        string       `json:"text"`
 }
 
 type VersionEntityGetAPIv1 struct {
-	Id         int64        `json:"id"`
-	Version    int          `json:"version"`
-	Type       int          `json:"releaseType"`
-	URL        string       `json:"downloadURL"`
-	Text       string       `json:"text"`
+	Id          int64        `json:"id"`
+	Version     int          `json:"version"`
+	Type        int          `json:"releaseType"`
+	URL         string       `json:"downloadURL"`
+	VersionText string       `json:"versionText"`
+	Text        string       `json:"text"`
 }
 
 
@@ -89,6 +92,7 @@ func mapAPItoDBVersion(api *VersionEntityPostAPIv1, db *VersionEntity) {
 	db.Type = api.Type
 	db.URL = api.URL
 	db.Text = api.Text
+	db.VersionText = api.Text
 }
 
 func mapDBtoAPIVersion(db *VersionEntity, api *VersionEntityGetAPIv1) {
@@ -96,6 +100,7 @@ func mapDBtoAPIVersion(db *VersionEntity, api *VersionEntityGetAPIv1) {
 	api.Type = db.Type
 	api.URL = db.URL
 	api.Text = db.Text
+	api.VersionText = db.VersionText
 }
 
 
