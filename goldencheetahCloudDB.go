@@ -227,7 +227,7 @@ func init() {
 	// setup the telemetry endpoints - processing see "entity_telemetry.go"
 	// ----------------------------------------------------------------------------------
 
-	ws.Route(ws.POST("/telemetry").Filter(basicAuthenticate).To(insertTelemetry).
+	ws.Route(ws.PUT("/telemetry").Filter(basicAuthenticate).To(upsertTelemetry).
 	// docs
 		Doc("stores location,... of the call based on IP adress").
 		Operation("post telemetry data").

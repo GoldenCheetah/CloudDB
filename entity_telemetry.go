@@ -36,8 +36,12 @@ type TelemetryEntity struct {
 	Country     string
 	Region      string
 	City        string
-	CityLatLong string
-	CreateDate  time.Time
+	CityLatLong string            `datastore:",noindex"`
+	CreateDate  time.Time         `datastore:",noindex"`
+	LastChange  time.Time         `datastore:",noindex"`
+	UseCount    int64             `datastore:",noindex"`
+	OS          string
+	GCVersion   string
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
@@ -46,7 +50,9 @@ type TelemetryEntity struct {
 
 // Full structure for POST/PUT
 type TelemetryEntityPostAPIv1 struct {
-	CreateDate string `json:"createDate"`
+	LastChange string `json:"lastChange"`
+	OS         string `json:"operatingSystem"`
+	GCVersion  string `json:"version"`
 }
 
 type TelemetryEntityGetAPIv1 struct {
@@ -55,6 +61,10 @@ type TelemetryEntityGetAPIv1 struct {
 	City        string `json:"city"`
 	CityLatLong string `json:"cityLatLong"`
 	CreateDate  string `json:"createDate"`
+	LastChange  string `json:"lastChange"`
+	UseCount    int64  `json:"useCount"`
+	OS          string `json:"operatingSystem"`
+	GCVersion   string `json:"version"`
 }
 
 type TelemetryEntityGetAPIv1List []TelemetryEntityGetAPIv1
@@ -67,12 +77,13 @@ const telemetryDBEntityRootKey = "telemetryroot"
 const telemetryDBEntity = "telemetryentity"
 
 func mapAPItoDBTelemetry(api *TelemetryEntityPostAPIv1, db *TelemetryEntity) {
-	if api.CreateDate != "" {
-		db.CreateDate, _ = time.Parse(dateTimeLayout, api.CreateDate)
+	if api.LastChange != "" {
+		db.LastChange, _ = time.Parse(dateTimeLayout, api.LastChange)
 	} else {
-		db.CreateDate = time.Now()
+		db.LastChange = time.Now()
 	}
-
+	db.GCVersion = api.GCVersion
+	db.OS = api.OS
 }
 
 func mapDBtoAPITelemetry(db *TelemetryEntity, api *TelemetryEntityGetAPIv1) {
@@ -81,6 +92,10 @@ func mapDBtoAPITelemetry(db *TelemetryEntity, api *TelemetryEntityGetAPIv1) {
 	api.Region = db.Region
 	api.CityLatLong = db.CityLatLong
 	api.CreateDate = db.CreateDate.Format(dateTimeLayout)
+	api.LastChange = db.LastChange.Format(dateTimeLayout)
+	api.UseCount = db.UseCount
+	api.GCVersion = db.GCVersion
+	api.OS = db.OS
 }
 
 // supporting functions
@@ -94,7 +109,7 @@ func telemetryEntityRootKey(ctx context.Context) *datastore.Key {
 // request/response handler
 // ---------------------------------------------------------------------------------------------------------------//
 
-func insertTelemetry(request *restful.Request, response *restful.Response) {
+func upsertTelemetry(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
 	telemetry := new(TelemetryEntityPostAPIv1)
@@ -106,19 +121,27 @@ func insertTelemetry(request *restful.Request, response *restful.Response) {
 	// No checks if the necessary fields are filed or not - since GoldenCheetah is
 	// the only consumer of the APIs - any checks/response are to support this use-case
 
-	telemetryDB := new(TelemetryEntity)
-	mapAPItoDBTelemetry(telemetry, telemetryDB)
+	// read if there is an entry existing for this IP Address
+	key := datastore.NewKey(ctx, telemetryDBEntity, request.Request.RemoteAddr, 0, telemetryEntityRootKey(ctx))
 
-	// now get the location information from the IP address
-	telemetryDB.Country = request.HeaderParameter("X-AppEngine-Country")
-	telemetryDB.Region = request.HeaderParameter("X-AppEngine-Region")
-	telemetryDB.City = request.HeaderParameter("X-AppEngine-City")
-	telemetryDB.CityLatLong = request.HeaderParameter("X-AppEngine-CityLatLong")
+	currentTelemetry := new(TelemetryEntity)
+	err := datastore.Get(ctx, key, currentTelemetry)
+	if err == nil {
+		// entry found, increment counter
+		currentTelemetry.UseCount += 1
+	} else {
+		// entry not found, create a new one
+		currentTelemetry.Country = request.HeaderParameter("X-AppEngine-Country")
+		currentTelemetry.Region = request.HeaderParameter("X-AppEngine-Region")
+		currentTelemetry.City = request.HeaderParameter("X-AppEngine-City")
+		currentTelemetry.CityLatLong = request.HeaderParameter("X-AppEngine-CityLatLong")
+		currentTelemetry.UseCount = 1
+		currentTelemetry.CreateDate = time.Now()
+	}
+	// general mapping
+	mapAPItoDBTelemetry(telemetry, currentTelemetry)
 
-	// and now store it
-	key := datastore.NewIncompleteKey(ctx, telemetryDBEntity, telemetryEntityRootKey(ctx))
-
-	if _, err := datastore.Put(ctx, key, telemetryDB); err != nil {
+	if _, err := datastore.Put(ctx, key, currentTelemetry); err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
 			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
@@ -128,7 +151,7 @@ func insertTelemetry(request *restful.Request, response *restful.Response) {
 		return
 	}
 
-	response.WriteHeaderAndEntity(http.StatusCreated, telemetryDB)
+	response.WriteHeaderAndEntity(http.StatusCreated, currentTelemetry)
 
 
 }
