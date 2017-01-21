@@ -50,12 +50,14 @@ type TelemetryEntity struct {
 
 // Full structure for POST/PUT
 type TelemetryEntityPostAPIv1 struct {
+	UserKey    string `json:"key"`
 	LastChange string `json:"lastChange"`
 	OS         string `json:"operatingSystem"`
 	GCVersion  string `json:"version"`
 }
 
 type TelemetryEntityGetAPIv1 struct {
+	UserKey     string `json:"key"`
 	Country     string `json:"country"`
 	Region      string `json:"region"`
 	City        string `json:"city"`
@@ -122,7 +124,7 @@ func upsertTelemetry(request *restful.Request, response *restful.Response) {
 	// the only consumer of the APIs - any checks/response are to support this use-case
 
 	// read if there is an entry existing for this IP Address
-	key := datastore.NewKey(ctx, telemetryDBEntity, request.Request.RemoteAddr, 0, telemetryEntityRootKey(ctx))
+	key := datastore.NewKey(ctx, telemetryDBEntity, telemetry.UserKey, 0, telemetryEntityRootKey(ctx))
 
 	currentTelemetry := new(TelemetryEntity)
 	err := datastore.Get(ctx, key, currentTelemetry)
@@ -176,7 +178,7 @@ func getTelemetry(request *restful.Request, response *restful.Response) {
 	var telemetryList TelemetryEntityGetAPIv1List
 
 	var telemetryOnDBList []TelemetryEntity
-	_, err = q.GetAll(ctx, &telemetryOnDBList)
+	k, err := q.GetAll(ctx, &telemetryOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
@@ -188,9 +190,10 @@ func getTelemetry(request *restful.Request, response *restful.Response) {
 	}
 
 	// DB Entity needs to be mapped back
-	for _, telemetryDB := range telemetryOnDBList {
+	for i, telemetryDB := range telemetryOnDBList {
 		var telemetryAPI TelemetryEntityGetAPIv1
 		mapDBtoAPITelemetry(&telemetryDB, &telemetryAPI)
+		telemetryAPI.UserKey = k[i].StringID()
 		telemetryList = append(telemetryList, telemetryAPI)
 	}
 
