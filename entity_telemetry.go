@@ -54,6 +54,7 @@ type TelemetryEntityPostAPIv1 struct {
 	LastChange string `json:"lastChange"`
 	OS         string `json:"operatingSystem"`
 	GCVersion  string `json:"version"`
+	Increment  int64  `json:"increment"`
 }
 
 type TelemetryEntityGetAPIv1 struct {
@@ -119,6 +120,10 @@ func upsertTelemetry(request *restful.Request, response *restful.Response) {
 		addPlainTextError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// set Increment if not yet set (just in case)
+	if telemetry.Increment == 0 {
+		telemetry.Increment = 1
+	}
 
 	// No checks if the necessary fields are filed or not - since GoldenCheetah is
 	// the only consumer of the APIs - any checks/response are to support this use-case
@@ -130,7 +135,7 @@ func upsertTelemetry(request *restful.Request, response *restful.Response) {
 	err := datastore.Get(ctx, key, currentTelemetry)
 	if err == nil {
 		// entry found, increment counter
-		currentTelemetry.UseCount += 1
+		currentTelemetry.UseCount += telemetry.Increment
 	} else {
 		// entry not found, create a new one
 		currentTelemetry.Country = request.HeaderParameter("X-AppEngine-Country")
