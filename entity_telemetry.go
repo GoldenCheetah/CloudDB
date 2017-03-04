@@ -34,11 +34,11 @@ import (
 // ---------------------------------------------------------------------------------------------------------------//
 type TelemetryEntity struct {
 	Country     string
-	Region      string
-	City        string
+	Region      string            `datastore:",noindex"`
+	City        string            `datastore:",noindex"`
 	CityLatLong string            `datastore:",noindex"`
-	CreateDate  time.Time         `datastore:",noindex"`
-	LastChange  time.Time         `datastore:",noindex"`
+	CreateDate  time.Time
+	LastChange  time.Time
 	UseCount    int64             `datastore:",noindex"`
 	OS          string
 	GCVersion   string
@@ -166,19 +166,49 @@ func upsertTelemetry(request *restful.Request, response *restful.Response) {
 func getTelemetry(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	var date time.Time
+	oldestDate := time.Date(2000, time.January, 1,0,0,0,0, time.UTC)
+	var createdAfter time.Time
+	var updatedAfter time.Time
 	var err error
-	if dateString := request.QueryParameter("dateFrom"); dateString != "" {
-		date, err = time.Parse(time.RFC3339, dateString)
+	if dateString := request.QueryParameter("createdAfter"); dateString != "" {
+		createdAfter, err = time.Parse(time.RFC3339, dateString)
 		if err != nil {
-			addPlainTextError(response, http.StatusBadRequest, fmt.Sprint(err.Error(), " - Correct format is RFC3339"))
+			addPlainTextError(response, http.StatusBadRequest, fmt.Sprint(err.Error(), " 'createdAfter' - Correct format is RFC3339"))
 			return
 		}
 	} else {
-		date = time.Time{}
+		createdAfter = oldestDate
 	}
+	if dateString := request.QueryParameter("updatedAfter"); dateString != "" {
+		updatedAfter, err = time.Parse(time.RFC3339, dateString)
+		if err != nil {
+			addPlainTextError(response, http.StatusBadRequest, fmt.Sprint(err.Error(), " 'updatedAfter' - Correct format is RFC3339"))
+			return
+		}
+	} else {
+		updatedAfter = oldestDate
+	}
+	os := request.QueryParameter("os")
+	version := request.QueryParameter("version")
 
-	q := datastore.NewQuery(telemetryDBEntity).Filter("CreateDate >=", date).Order("-CreateDate")
+	// only one query parameter is processed on the request in case of multiple parameters,
+	// follow the priority given by the sequence below (and ignore the other parameters)
+	var q* datastore.Query
+	if createdAfter != oldestDate {
+		q = datastore.NewQuery(telemetryDBEntity).
+			Filter("CreateDate >=", createdAfter)
+	} else if updatedAfter != oldestDate {
+		q = datastore.NewQuery(telemetryDBEntity).
+			Filter("LastChange >=", updatedAfter)
+	} else if os != "" {
+		q = datastore.NewQuery(telemetryDBEntity).
+			Filter("OS =", os)
+	} else if version != "" {
+		q = datastore.NewQuery(telemetryDBEntity).
+			Filter("GCVersion =", version)
+	} else {
+		q = datastore.NewQuery(telemetryDBEntity)
+	}
 
 	var telemetryList TelemetryEntityGetAPIv1List
 

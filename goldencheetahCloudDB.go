@@ -237,7 +237,10 @@ func init() {
 	// docs
 		Doc("gets a collection of versions").
 		Operation("get All Telemetry Data").
-		Param(ws.QueryParameter("dateFrom", "Telemetry created after").DataType("string")).
+		Param(ws.QueryParameter("createdAfter", "Telemetry created after").DataType("string")).
+		Param(ws.QueryParameter("updatedAfter", "Telemetry last updated after").DataType("string")).
+		Param(ws.QueryParameter("os", "Operating System").DataType("string")).
+		Param(ws.QueryParameter("version", "GoldenCheetah Version").DataType("string")).
 		Writes(TelemetryEntityGetAPIv1List{})) // on the response
 
 	// all routes defined - let's go
