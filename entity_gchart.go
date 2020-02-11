@@ -16,13 +16,14 @@
  */
 
 
-package goldencheetah
+package main
 
 import (
-	"net/http"
-	"time"
-	"strconv"
+	"encoding/binary"
 	"fmt"
+	"net/http"
+	"strconv"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
@@ -124,6 +125,11 @@ func mapAPItoDBGChart(api *GChartPostAPIv1, db *GChartEntity) {
 		data = nil
 	} else {
 		db.Image = data
+	}
+	// no picture bigger than 1000k please since Appengine
+	// datastore api V3 only supports calls up to 1536 KB
+	if binary.Size(db.Image) > 1024000 {
+		db.Image = nil
 	}
 	db.CreatorNick = api.CreatorNick
 	db.CreatorEmail = api.CreatorEmail

@@ -16,13 +16,13 @@
  */
 
 
-package goldencheetah
+package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
-	"fmt"
 
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"

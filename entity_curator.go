@@ -16,7 +16,7 @@
  */
 
 
-package goldencheetah
+package main
 
 import (
 	"net/http"

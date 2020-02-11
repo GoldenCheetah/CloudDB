@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, 2017 Joern Rischmueller (joern.rm@gmail.com)
+ * Copyright (c) 2015, 2016, 2017, 2020 Joern Rischmueller (joern.rm@gmail.com)
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU Affero General Public License as
@@ -15,20 +15,23 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-package goldencheetah
+package main
 
 import (
-
-	"os"
 	"fmt"
 	"net/http"
+	"os"
 
 	"google.golang.org/appengine"
 
-	"github.com/emicklei/go-restful"  // @Version Tag  v1.2
+	"github.com/emicklei/go-restful" // @Version Tag  v2.11.2
 )
+
+func main() {
+
+	appengine.Main()
+
+}
 
 // init the Webserver within the GAE framework
 func init() {
