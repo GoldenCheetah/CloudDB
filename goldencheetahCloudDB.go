@@ -126,20 +126,20 @@ func init() {
 	// docs
 	Doc("get a usermetric").
 	Operation("getUserMetricbyId").
-	Param(ws.PathParameter("key", "identifier of the user metric").DataType("string")).
+	Param(ws.PathParameter("id", "identifier of the user metric").DataType("string")).
 	Writes(UserMetricAPIv1{})) // on the response
 
 	ws.Route(ws.DELETE("/usermetric/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(deleteUserMetricById).
 	// docs
 	Doc("delete a usermetric by setting the deleted status").
-	Operation("deleteUserMetricbyKey").
-	Param(ws.PathParameter("key", "identifier of the usermetric").DataType("string")))
+	Operation("deleteUserMetricbyId").
+	Param(ws.PathParameter("id", "identifier of the usermetric").DataType("string")))
 
 	ws.Route(ws.PUT("/usermetriccuration/{id}").Filter(basicAuthenticate).Filter(filterCloudDBStatus).To(curateUserMetricById).
 	// docs
 	Doc("set the curation status of the usermetric to {newStatus} which must be 'true' or 'false' ").
 	Operation("updateUserMetricCurationStatus").
-	Param(ws.PathParameter("key", "identifier of the usermetric").DataType("string")).
+	Param(ws.PathParameter("id", "identifier of the usermetric").DataType("string")).
 	Param(ws.QueryParameter("newStatus", "true/false curation status").DataType("bool")))
 
 	// Endpoint for Header only
