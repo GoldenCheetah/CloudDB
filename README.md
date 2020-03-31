@@ -4,7 +4,7 @@ Cloud DB is cloud based data storage extension of GoldenCheetah (available in Go
 It is planned to provide Cloud Database for GoldenCheetah artifacts
 
 1. Charts (including chart specific metrics) (done - available in GC 3.4 onwards)
-2. User Metrics (Not planned yet)
+2. User Metrics (done - available in GC 3.6 onwards)
 3. Layouts (Not planned yet)
 4. Workouts (Not planned yet)
 
