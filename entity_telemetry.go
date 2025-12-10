@@ -22,7 +22,8 @@ import (
 	"net/http"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
@@ -34,12 +35,12 @@ import (
 // ---------------------------------------------------------------------------------------------------------------//
 type TelemetryEntity struct {
 	Country     string
-	Region      string            `datastore:",noindex"`
-	City        string            `datastore:",noindex"`
-	CityLatLong string            `datastore:",noindex"`
+	Region      string `datastore:",noindex"`
+	City        string `datastore:",noindex"`
+	CityLatLong string `datastore:",noindex"`
 	CreateDate  time.Time
 	LastChange  time.Time
-	UseCount    int64             `datastore:",noindex"`
+	UseCount    int64 `datastore:",noindex"`
 	OS          string
 	GCVersion   string
 }
@@ -105,7 +106,7 @@ func mapDBtoAPITelemetry(db *TelemetryEntity, api *TelemetryEntityGetAPIv1) {
 
 // telemetryEntityKey returns the key used for all telemetryEntity entries.
 func telemetryEntityRootKey(ctx context.Context) *datastore.Key {
-	return datastore.NewKey(ctx, telemetryDBEntity, telemetryDBEntityRootKey, 0, nil)
+	return DB.NewKey(ctx, telemetryDBEntity, telemetryDBEntityRootKey, 0, nil)
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
@@ -129,10 +130,10 @@ func upsertTelemetry(request *restful.Request, response *restful.Response) {
 	// the only consumer of the APIs - any checks/response are to support this use-case
 
 	// read if there is an entry existing for this IP Address
-	key := datastore.NewKey(ctx, telemetryDBEntity, telemetry.UserKey, 0, telemetryEntityRootKey(ctx))
+	key := DB.NewKey(ctx, telemetryDBEntity, telemetry.UserKey, 0, telemetryEntityRootKey(ctx))
 
 	currentTelemetry := new(TelemetryEntity)
-	err := datastore.Get(ctx, key, currentTelemetry)
+	err := DB.Get(ctx, key, currentTelemetry)
 	if err == nil {
 		// entry found, increment counter
 		currentTelemetry.UseCount += telemetry.Increment
@@ -148,7 +149,7 @@ func upsertTelemetry(request *restful.Request, response *restful.Response) {
 	// general mapping
 	mapAPItoDBTelemetry(telemetry, currentTelemetry)
 
-	if _, err := datastore.Put(ctx, key, currentTelemetry); err != nil {
+	if _, err := DB.Put(ctx, key, currentTelemetry); err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
 			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
@@ -160,13 +161,12 @@ func upsertTelemetry(request *restful.Request, response *restful.Response) {
 
 	response.WriteHeaderAndEntity(http.StatusCreated, currentTelemetry)
 
-
 }
 
 func getTelemetry(request *restful.Request, response *restful.Response) {
 	ctx := appengine.NewContext(request.Request)
 
-	oldestDate := time.Date(2000, time.January, 1,0,0,0,0, time.UTC)
+	oldestDate := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 	var createdAfter time.Time
 	var updatedAfter time.Time
 	var err error
@@ -193,21 +193,21 @@ func getTelemetry(request *restful.Request, response *restful.Response) {
 
 	// only one query parameter is processed on the request in case of multiple parameters,
 	// follow the priority given by the sequence below (and ignore the other parameters)
-	var q* datastore.Query
+	var q Query
 	if createdAfter != oldestDate {
-		q = datastore.NewQuery(telemetryDBEntity).
+		q = DB.NewQuery(telemetryDBEntity).
 			Filter("CreateDate >=", createdAfter)
 	} else if updatedAfter != oldestDate {
-		q = datastore.NewQuery(telemetryDBEntity).
+		q = DB.NewQuery(telemetryDBEntity).
 			Filter("LastChange >=", updatedAfter)
 	} else if os != "" {
-		q = datastore.NewQuery(telemetryDBEntity).
+		q = DB.NewQuery(telemetryDBEntity).
 			Filter("OS =", os)
 	} else if version != "" {
-		q = datastore.NewQuery(telemetryDBEntity).
+		q = DB.NewQuery(telemetryDBEntity).
 			Filter("GCVersion =", version)
 	} else {
-		q = datastore.NewQuery(telemetryDBEntity)
+		q = DB.NewQuery(telemetryDBEntity)
 	}
 
 	var telemetryList TelemetryEntityGetAPIv1List

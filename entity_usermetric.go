@@ -15,38 +15,37 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 package main
 
 import (
-	"google.golang.org/appengine/log"
-	"net/http"
-	"time"
-	"strconv"
 	"fmt"
+	"net/http"
+	"strconv"
+	"time"
 
-	"golang.org/x/net/context"
+	"google.golang.org/appengine/log"
+
+	"context"
+
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	"github.com/emicklei/go-restful"
 )
 
-
 // ---------------------------------------------------------------------------------------------------------------//
 // Full Golden Cheetah usermetric definition (usermetricentity) which is stored in DB
 // ---------------------------------------------------------------------------------------------------------------//
 type UserMetricEntity struct {
 	Header       CommonEntityHeader
-	MetricXML    string       `datastore:",noindex"`
-	CreatorNick  string       `datastore:",noindex"`
-	CreatorEmail string       `datastore:",noindex"`
+	MetricXML    string `datastore:",noindex"`
+	CreatorNick  string `datastore:",noindex"`
+	CreatorEmail string `datastore:",noindex"`
 }
 
 type UserMetricEntityHeaderOnly struct {
 	Header CommonEntityHeader
 }
-
 
 // ---------------------------------------------------------------------------------------------------------------//
 // API View Definition
@@ -55,9 +54,9 @@ type UserMetricEntityHeaderOnly struct {
 // Full structure for GET and PUT
 type UserMetricAPIv1 struct {
 	Header       CommonAPIHeaderV1 `json:"header"`
-	MetricXML    string      `json:"metrictxml"`
-	CreatorNick  string      `json:"creatorNick"`
-	CreatorEmail string      `json:"creatorEmail"`
+	MetricXML    string            `json:"metrictxml"`
+	CreatorNick  string            `json:"creatorNick"`
+	CreatorEmail string            `json:"creatorEmail"`
 }
 
 type UserMetricAPIv1List []UserMetricAPIv1
@@ -67,8 +66,6 @@ type UserMetricAPIv1HeaderOnly struct {
 	Header CommonAPIHeaderV1 `json:"header"`
 }
 type UserMetricAPIv1HeaderOnlyList []UserMetricAPIv1HeaderOnly
-
-
 
 // ---------------------------------------------------------------------------------------------------------------//
 // Data Storage View
@@ -84,21 +81,18 @@ func mapAPItoDBUserMetric(api *UserMetricAPIv1, db *UserMetricEntity) {
 	db.CreatorEmail = api.CreatorEmail
 }
 
-
-func mapDBtoAPIUserMetric(db* UserMetricEntity, api *UserMetricAPIv1) {
+func mapDBtoAPIUserMetric(db *UserMetricEntity, api *UserMetricAPIv1) {
 	mapDBtoAPICommonHeader(&db.Header, &api.Header)
 	api.MetricXML = db.MetricXML
 	api.CreatorNick = db.CreatorNick
 	api.CreatorEmail = db.CreatorEmail
 }
 
-
-
 // supporting functions
 
 // usermetricEntityKey returns the key used for all usermetricEntity entries.
 func usermetricEntityRootKey(ctx context.Context) *datastore.Key {
-	return datastore.NewKey(ctx, usermetricDBEntity, usermetricDBEntityRootKey, 0, nil)
+	return DB.NewKey(ctx, usermetricDBEntity, usermetricDBEntityRootKey, 0, nil)
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
@@ -106,7 +100,7 @@ func usermetricEntityRootKey(ctx context.Context) *datastore.Key {
 // ---------------------------------------------------------------------------------------------------------------//
 
 func insertUserMetric(request *restful.Request, response *restful.Response) {
-	ctx := appengine.NewContext(request.Request)
+	ctx := request.Request.Context()
 
 	metric := new(UserMetricAPIv1)
 	if err := request.ReadEntity(metric); err != nil {
@@ -126,7 +120,7 @@ func insertUserMetric(request *restful.Request, response *restful.Response) {
 	metricDB.Header.Deleted = false
 
 	// auto-curate if a registered "curator" is adding user metric
-	curatorQuery := datastore.NewQuery(curatorDBEntity).Filter("CuratorId =", metricDB.Header.CreatorId)
+	curatorQuery := DB.NewQuery(curatorDBEntity).Filter("CuratorId =", metricDB.Header.CreatorId)
 	counter, _ := curatorQuery.Count(ctx) // ignore errors/just leave uncurated
 	if counter == 1 {
 		metricDB.Header.Curated = true
@@ -135,10 +129,10 @@ func insertUserMetric(request *restful.Request, response *restful.Response) {
 	}
 
 	// and now store it
-	key := datastore.NewIncompleteKey(ctx, usermetricDBEntity, usermetricEntityRootKey(ctx))
-	key, err := datastore.Put(ctx, key, metricDB)
+	key := DB.NewIncompleteKey(ctx, usermetricDBEntity, usermetricEntityRootKey(ctx))
+	key, err := DB.Put(ctx, key, metricDB)
 	if err != nil {
-		commonResponseErrorProcessing (response, err)
+		commonResponseErrorProcessing(response, err)
 		return
 	}
 
@@ -148,7 +142,7 @@ func insertUserMetric(request *restful.Request, response *restful.Response) {
 }
 
 func updateUserMetric(request *restful.Request, response *restful.Response) {
-	ctx := appengine.NewContext(request.Request)
+	ctx := request.Request.Context()
 
 	metric := new(UserMetricAPIv1)
 	if err := request.ReadEntity(metric); err != nil {
@@ -170,9 +164,9 @@ func updateUserMetric(request *restful.Request, response *restful.Response) {
 
 	// and now store it
 
-	key := datastore.NewKey(ctx, usermetricDBEntity, "", metric.Header.Id, usermetricEntityRootKey(ctx))
-	if _, err := datastore.Put(ctx, key, metricDB); err != nil {
-		commonResponseErrorProcessing (response, err)
+	key := DB.NewKey(ctx, usermetricDBEntity, "", metric.Header.Id, usermetricEntityRootKey(ctx))
+	if _, err := DB.Put(ctx, key, metricDB); err != nil {
+		commonResponseErrorProcessing(response, err)
 		return
 	}
 
@@ -181,7 +175,7 @@ func updateUserMetric(request *restful.Request, response *restful.Response) {
 
 }
 func getUserMetricHeader(request *restful.Request, response *restful.Response) {
-	ctx := appengine.NewContext(request.Request)
+	ctx := request.Request.Context()
 
 	var date time.Time
 	var err error
@@ -196,16 +190,16 @@ func getUserMetricHeader(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	const maxNumberOfHeadersPerCall = 200; // this has to be equal to GoldenCheetah - CloudDBUserMetric class
+	const maxNumberOfHeadersPerCall = 200 // this has to be equal to GoldenCheetah - CloudDBUserMetric class
 
-	q := datastore.NewQuery(usermetricDBEntity).Filter("Header.LastChanged >=", date).Order("Header.LastChanged").Limit(maxNumberOfHeadersPerCall)
+	q := DB.NewQuery(usermetricDBEntity).Filter("Header.LastChanged >=", date).Order("Header.LastChanged").Limit(maxNumberOfHeadersPerCall)
 
 	var metricHeaderList UserMetricAPIv1HeaderOnlyList
 
 	var metricsOnDBList []UserMetricEntityHeaderOnly
 	k, err := q.GetAll(ctx, &metricsOnDBList)
 	if err != nil && !isErrFieldMismatch(err) {
-		commonResponseErrorProcessing (response, err)
+		commonResponseErrorProcessing(response, err)
 		return
 	}
 
@@ -218,14 +212,14 @@ func getUserMetricHeader(request *restful.Request, response *restful.Response) {
 	}
 
 	// write Info Log
-	log.Infof(ctx, "GetHeader from: %s", dateString )
+	log.Infof(ctx, "GetHeader from: %s", dateString)
 
 	response.WriteHeaderAndEntity(http.StatusOK, metricHeaderList)
 
 }
 
 func getUserMetricHeaderCount(request *restful.Request, response *restful.Response) {
-	ctx := appengine.NewContext(request.Request)
+	ctx := request.Request.Context()
 
 	var date time.Time
 	var err error
@@ -239,7 +233,7 @@ func getUserMetricHeaderCount(request *restful.Request, response *restful.Respon
 		date = time.Time{}
 	}
 
-	q := datastore.NewQuery(usermetricDBEntity).Filter("Header.LastChanged >=", date).Order("-Header.LastChanged")
+	q := DB.NewQuery(usermetricDBEntity).Filter("Header.LastChanged >=", date).Order("-Header.LastChanged")
 	counter, _ := q.Count(ctx)
 
 	response.WriteHeaderAndEntity(http.StatusOK, counter)
@@ -247,29 +241,28 @@ func getUserMetricHeaderCount(request *restful.Request, response *restful.Respon
 }
 
 func getUserMetricById(request *restful.Request, response *restful.Response) {
-	ctx := appengine.NewContext(request.Request)
+	ctx := request.Request.Context()
 
 	id := request.PathParameter("id")
 	i, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		commonResponseErrorProcessing (response, err)
+		commonResponseErrorProcessing(response, err)
 		return
 	}
 
-	key := datastore.NewKey(ctx, usermetricDBEntity, "", i, usermetricEntityRootKey(ctx))
+	key := DB.NewKey(ctx, usermetricDBEntity, "", i, usermetricEntityRootKey(ctx))
 
 	metricDB := new(UserMetricEntity)
-	err = datastore.Get(ctx, key, metricDB)
+	err = DB.Get(ctx, key, metricDB)
 	if err != nil && !isErrFieldMismatch(err) {
-		commonResponseErrorProcessing (response, err)
+		commonResponseErrorProcessing(response, err)
 		return
 	}
-
 
 	// now map and respond
 	metric := new(UserMetricAPIv1)
 	mapDBtoAPIUserMetric(metricDB, metric)
-	metric.Header.Id= key.IntID()
+	metric.Header.Id = key.IntID()
 
 	response.WriteHeaderAndEntity(http.StatusOK, metric)
 }
@@ -295,7 +288,7 @@ func curateUserMetricById(request *restful.Request, response *restful.Response) 
 // ------------------- supporting functions ------------------------------------------------
 
 func changeUserMetricById(request *restful.Request, response *restful.Response, changeDeleted bool, changeCurated bool, newStatus bool) {
-	c := appengine.NewContext(request.Request)
+	c := request.Request.Context()
 
 	id := request.PathParameter("id")
 	i, err := strconv.ParseInt(id, 10, 64)
@@ -304,12 +297,12 @@ func changeUserMetricById(request *restful.Request, response *restful.Response, 
 		return
 	}
 
-	key := datastore.NewKey(c, usermetricDBEntity, "", i, usermetricEntityRootKey(c))
+	key := DB.NewKey(c, usermetricDBEntity, "", i, usermetricEntityRootKey(c))
 
 	metricDB := new(UserMetricEntity)
-	err = datastore.Get(c, key, metricDB)
+	err = DB.Get(c, key, metricDB)
 	if err != nil && !isErrFieldMismatch(err) {
-		commonResponseErrorProcessing (response, err)
+		commonResponseErrorProcessing(response, err)
 		return
 	}
 
@@ -328,7 +321,7 @@ func changeUserMetricById(request *restful.Request, response *restful.Response, 
 		metricDB.Header.LastChanged = time.Now()
 	}
 
-	if _, err := datastore.Put(c, key, metricDB); err != nil {
+	if _, err := DB.Put(c, key, metricDB); err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
 			addPlainTextError(response, http.StatusServiceUnavailable, "503 - Over Quota")
@@ -342,4 +335,3 @@ func changeUserMetricById(request *restful.Request, response *restful.Response, 
 	response.WriteHeaderAndEntity(http.StatusNoContent, "")
 
 }
-

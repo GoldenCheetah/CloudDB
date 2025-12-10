@@ -15,7 +15,6 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 package main
 
 import (
@@ -24,14 +23,13 @@ import (
 	"strconv"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/memcache"
 
 	"github.com/emicklei/go-restful"
 )
-
 
 // ---------------------------------------------------------------------------------------------------------------//
 // Golden Cheetah curator (statusentity) which is stored in DB
@@ -43,15 +41,13 @@ type StatusEntity struct {
 
 // Constants defined for documentation purposes - as they are set by GC
 const (
-	Status_Ok = 10
+	Status_Ok             = 10
 	Status_PartialFailure = 20
-	Status_Outage = 30
+	Status_Outage         = 30
 )
 
-
-
 type StatusEntityText struct {
-	Text string                 `datastore:",noindex"`
+	Text string `datastore:",noindex"`
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
@@ -60,21 +56,21 @@ type StatusEntityText struct {
 
 // Full structure for POST/PUT
 type StatusEntityPostAPIv1 struct {
-	Id         int64        `json:"id"`
-	Status     int        `json:"status"`
-	ChangeDate string        `json:"changeDate"`
-	Text       string       `json:"text"`
+	Id         int64  `json:"id"`
+	Status     int    `json:"status"`
+	ChangeDate string `json:"changeDate"`
+	Text       string `json:"text"`
 }
 
 type StatusEntityGetAPIv1 struct {
-	Id         int64        `json:"id"`
-	Status     int        `json:"status"`
-	ChangeDate string        `json:"changeDate"`
+	Id         int64  `json:"id"`
+	Status     int    `json:"status"`
+	ChangeDate string `json:"changeDate"`
 }
 
 type StatusEntityGetTextAPIv1 struct {
-	Id   int64        `json:"id"`
-	Text string       `json:"text"`
+	Id   int64  `json:"id"`
+	Text string `json:"text"`
 }
 
 type StatusEntityGetAPIv1List []StatusEntityGetAPIv1
@@ -108,12 +104,11 @@ func mapDBtoAPIStatus(db *StatusEntity, api *StatusEntityGetAPIv1) {
 	api.ChangeDate = db.ChangeDate.Format(dateTimeLayout)
 }
 
-
 // supporting functions
 
 // statusEntityKey returns the key used for all statusEntity entries.
 func statusEntityRootKey(ctx context.Context) *datastore.Key {
-	return datastore.NewKey(ctx, statusDBEntity, statusDBEntityRootKey, 0, nil)
+	return DB.NewKey(ctx, statusDBEntity, statusDBEntityRootKey, 0, nil)
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
@@ -136,8 +131,8 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 	mapAPItoDBStatus(status, statusDB)
 
 	// and now store it
-	key := datastore.NewIncompleteKey(ctx, statusDBEntity, statusEntityRootKey(ctx))
-	key, err := datastore.Put(ctx, key, statusDB);
+	key := DB.NewIncompleteKey(ctx, statusDBEntity, statusEntityRootKey(ctx))
+	key, err := DB.Put(ctx, key, statusDB)
 	if err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
@@ -152,8 +147,8 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 		statusDBText := new(StatusEntityText)
 		statusDBText.Text = status.Text
 		// and now store it as child of statusEntry
-		key := datastore.NewIncompleteKey(ctx, statusDBEntityText, key)
-		key, err := datastore.Put(ctx, key, statusDBText);
+		key := DB.NewIncompleteKey(ctx, statusDBEntityText, key)
+		key, err := DB.Put(ctx, key, statusDBText)
 		if err != nil {
 			if appengine.IsOverQuota(err) {
 				// return 503 and a text similar to what GAE is returning as well
@@ -171,7 +166,7 @@ func insertStatus(request *restful.Request, response *restful.Response) {
 	in.ChangeDate = status.ChangeDate
 
 	// flush the memcache
-	memcache.Flush(ctx)
+	DB.CacheFlush(ctx)
 
 	// send back the key
 	response.WriteHeaderAndEntity(http.StatusCreated, strconv.FormatInt(key.IntID(), 10))
@@ -193,7 +188,7 @@ func getStatus(request *restful.Request, response *restful.Response) {
 		date = time.Time{}
 	}
 
-	q := datastore.NewQuery(statusDBEntity).Filter("ChangeDate >=", date).Order("-ChangeDate")
+	q := DB.NewQuery(statusDBEntity).Filter("ChangeDate >=", date).Order("-ChangeDate")
 
 	var statusList StatusEntityGetAPIv1List
 
@@ -226,12 +221,12 @@ func getCurrentStatus(request *restful.Request, response *restful.Response) {
 	var statusAPI StatusEntityGetAPIv1
 
 	// first check Memcache
-	if _, err := memcache.Gob.Get(ctx, statusMemcacheKey, &statusAPI); err == nil {
+	if err := DB.CacheGet(ctx, statusMemcacheKey, &statusAPI); err == nil {
 		response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
 		return
 	}
 
-	q := datastore.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
+	q := DB.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
 
 	var statusOnDBList []StatusEntity
 	k, err := q.GetAll(ctx, &statusOnDBList)
@@ -250,11 +245,8 @@ func getCurrentStatus(request *restful.Request, response *restful.Response) {
 	statusAPI.Id = k[0].IntID()
 
 	// add to memcache / overwrite existing / ignore errors
-	item := &memcache.Item{
-		Key:   statusMemcacheKey,
-		Object: statusAPI,
-	}
-	memcache.Gob.Set(ctx, item)
+	// add to memcache / overwrite existing / ignore errors
+	DB.CacheSet(ctx, statusMemcacheKey, statusAPI)
 
 	response.WriteHeaderAndEntity(http.StatusOK, statusAPI)
 }
@@ -269,9 +261,9 @@ func getStatusTextById(request *restful.Request, response *restful.Response) {
 		return
 	}
 
-	statusKey := datastore.NewKey(ctx, statusDBEntity, "", i, statusEntityRootKey(ctx))
+	statusKey := DB.NewKey(ctx, statusDBEntity, "", i, statusEntityRootKey(ctx))
 
-	q := datastore.NewQuery(statusDBEntityText).Ancestor(statusKey).Limit(1) // we have max. 1 Text per status
+	q := DB.NewQuery(statusDBEntityText).Ancestor(statusKey).Limit(1) // we have max. 1 Text per status
 
 	var statusTextOnDBList []StatusEntityText
 	k, err := q.GetAll(ctx, &statusTextOnDBList)
@@ -301,13 +293,12 @@ func getStatusTextById(request *restful.Request, response *restful.Response) {
 func internalGetCurrentStatus(ctx context.Context) int {
 
 	// first check Memcache
-	if item, err := memcache.Get(ctx, statusMemcacheKey); err == nil {
-		if i64, err := strconv.ParseInt(string(item.Value), 10, 0); err == nil {
-			return int(i64)
-		}
+	var itemValue int64
+	if err := DB.CacheGet(ctx, statusMemcacheKey, &itemValue); err == nil {
+		return int(itemValue)
 	}
 
-	q := datastore.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
+	q := DB.NewQuery(statusDBEntity).Order("-ChangeDate").Limit(1)
 
 	var statusOnDBList []StatusEntity
 	_, err := q.GetAll(ctx, &statusOnDBList)
@@ -318,6 +309,3 @@ func internalGetCurrentStatus(ctx context.Context) int {
 
 	return statusOnDBList[0].Status
 }
-
-
-

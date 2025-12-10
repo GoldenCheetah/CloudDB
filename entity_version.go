@@ -15,43 +15,41 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
-	"fmt"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	"github.com/emicklei/go-restful"
 )
 
-
 // ---------------------------------------------------------------------------------------------------------------//
 // Golden Cheetah curator (versionentity) which is stored in DB
 // ---------------------------------------------------------------------------------------------------------------//
 type VersionEntity struct {
 	Version     int
-	Type        int          `datastore:",noindex"`
-	URL         string       `datastore:",noindex"`
-	Text        string       `datastore:",noindex"`
-	VersionText string       `datastore:",noindex"`
+	Type        int    `datastore:",noindex"`
+	URL         string `datastore:",noindex"`
+	Text        string `datastore:",noindex"`
+	VersionText string `datastore:",noindex"`
 }
 
 // Constants defined for documentation purposes - as they are set by GC
 const (
-	Version_Release = 10
+	Version_Release           = 10
 	Version_Release_Candidate = 20
 	Version_Development_Build = 30
 )
 
-
 type VersionEntityText struct {
-	Text string                 `datastore:",noindex"`
+	Text string `datastore:",noindex"`
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
@@ -60,25 +58,23 @@ type VersionEntityText struct {
 
 // Full structure for POST/PUT
 type VersionEntityPostAPIv1 struct {
-	Version     int          `json:"version"`
-	Type        int          `json:"releaseType"`
-	URL         string       `json:"downloadURL"`
-	VersionText string       `json:"versionText"`
-	Text        string       `json:"text"`
+	Version     int    `json:"version"`
+	Type        int    `json:"releaseType"`
+	URL         string `json:"downloadURL"`
+	VersionText string `json:"versionText"`
+	Text        string `json:"text"`
 }
 
 type VersionEntityGetAPIv1 struct {
-	Id          int64        `json:"id"`
-	Version     int          `json:"version"`
-	Type        int          `json:"releaseType"`
-	URL         string       `json:"downloadURL"`
-	VersionText string       `json:"versionText"`
-	Text        string       `json:"text"`
+	Id          int64  `json:"id"`
+	Version     int    `json:"version"`
+	Type        int    `json:"releaseType"`
+	URL         string `json:"downloadURL"`
+	VersionText string `json:"versionText"`
+	Text        string `json:"text"`
 }
 
-
 type VersionEntityGetAPIv1List []VersionEntityGetAPIv1
-
 
 // ---------------------------------------------------------------------------------------------------------------//
 // Data Storage View
@@ -103,12 +99,11 @@ func mapDBtoAPIVersion(db *VersionEntity, api *VersionEntityGetAPIv1) {
 	api.VersionText = db.VersionText
 }
 
-
 // supporting functions
 
 // versionEntityKey returns the key used for all versionEntity entries.
 func versionEntityRootKey(ctx context.Context) *datastore.Key {
-	return datastore.NewKey(ctx, versionDBEntity, versionDBEntityRootKey, 0, nil)
+	return DB.NewKey(ctx, versionDBEntity, versionDBEntityRootKey, 0, nil)
 }
 
 // ---------------------------------------------------------------------------------------------------------------//
@@ -131,8 +126,8 @@ func insertVersion(request *restful.Request, response *restful.Response) {
 	mapAPItoDBVersion(version, versionDB)
 
 	// and now store it
-	key := datastore.NewIncompleteKey(ctx, versionDBEntity, versionEntityRootKey(ctx))
-	key, err := datastore.Put(ctx, key, versionDB)
+	key := DB.NewIncompleteKey(ctx, versionDBEntity, versionEntityRootKey(ctx))
+	key, err := DB.Put(ctx, key, versionDB)
 	if err != nil {
 		if appengine.IsOverQuota(err) {
 			// return 503 and a text similar to what GAE is returning as well
@@ -160,7 +155,7 @@ func getVersion(request *restful.Request, response *restful.Response) {
 		}
 	}
 
-	q := datastore.NewQuery(versionDBEntity).Filter("Version >", version).Order("-Version")
+	q := DB.NewQuery(versionDBEntity).Filter("Version >", version).Order("-Version")
 
 	var versionList VersionEntityGetAPIv1List
 
@@ -192,7 +187,7 @@ func getLatestVersion(request *restful.Request, response *restful.Response) {
 
 	var versionAPI VersionEntityGetAPIv1
 
-	q := datastore.NewQuery(versionDBEntity).Order("-Version").Limit(1)
+	q := DB.NewQuery(versionDBEntity).Order("-Version").Limit(1)
 
 	var versionOnDBList []VersionEntity
 	k, err := q.GetAll(ctx, &versionOnDBList)
@@ -212,9 +207,3 @@ func getLatestVersion(request *restful.Request, response *restful.Response) {
 
 	response.WriteHeaderAndEntity(http.StatusOK, versionAPI)
 }
-
-
-
-
-
-
