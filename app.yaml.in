@@ -1,4 +1,5 @@
-runtime: go111
+runtime: go125
+app_engine_apis: true
 
 env_variables:
   Basic_Auth: '< the Basic_Auth Secret - in sync with GC_CLOUD_DB_BASIC_AUTH in GC config.pri >'
